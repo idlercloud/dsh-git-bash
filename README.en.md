@@ -1,4 +1,4 @@
-# dsh-gitbash
+# @idlercloud/dsh-git-bash
 
 <p align="center">
   <b>A real bash tool for DSH on Windows: call bash directly, with no pwsh escaping and no quoting hell.</b>
@@ -14,6 +14,8 @@
   <img alt="license" src="https://img.shields.io/badge/license-MIT-3DA639?style=flat-square">
   <img alt="deps" src="https://img.shields.io/badge/dependencies-0-brightgreen?style=flat-square">
 </p>
+
+> **This repository is a fork of [`Fishquito7/dsh-gitbash`](https://github.com/Fishquito7/dsh-gitbash).** It is based on upstream v0.1.3. The package name is `@idlercloud/dsh-git-bash`; the tool the model sees is still `bash`. This fork has not been published to GitHub or npm, so installation is not available yet.
 
 ---
 
@@ -58,77 +60,9 @@ The command string goes straight to `bash -c` and is parsed by bash rules exactl
 
 ---
 
-## Install
+## Install, upgrade, and uninstall
 
-> Replace `web` with the profile you actually use (the Web UI ships one named `web`).
-
-### Option 1: GitHub Release tarball
-
-```powershell
-dsh plugin --profile web add "https://github.com/Fishquito7/dsh-gitbash/releases/latest/download/dsh-git-bash.tgz"
-```
-
-`releases/latest/download/` always points at the newest release. To pin a version, use the tag-qualified URL:
-
-```text
-https://github.com/Fishquito7/dsh-gitbash/releases/download/v0.1.0/dsh-git-bash-0.1.0.tgz
-```
-
-> **Fallback: install straight from the GitHub repository**
->
-> ```powershell
-> dsh plugin --profile web add "github:Fishquito7/dsh-gitbash"
-> ```
->
-> This path goes through pnpm directly, and some environments refuse it under their build-script policy (pnpm reports `ignored build scripts` and similar). If that happens, go back to Option 1.
-
-### Option 2: local install
-
-You already downloaded the tarball, or you want to install a local source directory:
-
-```powershell
-# a local tarball
-dsh plugin --profile web add "file:C:/path/to/dsh-git-bash-0.1.0.tgz"
-
-# a local source directory (while editing)
-dsh plugin --profile web add "file:C:/path/to/dsh-gitbash"
-```
-
-### Restart DSH
-
-A newly installed bundle is a new module root and is **not hot-reloaded**, so the `bash` tool appears only after a host restart.
-
-### Verify
-
-After the restart, the plugin panel should show `git-bash-executor` and `git-bash-tool` as running. Then ask the model to run:
-
-```bash
-echo "argv0=$0"; uname -s; echo "bash=$BASH_VERSION"
-# expected: /usr/bin/bash, MINGW64_NT-..., bash 5.x
-```
-
----
-
-## Upgrade
-
-pnpm will not re-fetch a dependency it already has, so upgrade by **removing first**:
-
-```powershell
-dsh plugin --profile web remove dsh-git-bash
-dsh plugin --profile web add "https://github.com/Fishquito7/dsh-gitbash/releases/latest/download/dsh-git-bash.tgz"
-```
-
-Then restart DSH. To pin a version, swap the URL for the tag-qualified form.
-
----
-## Uninstall and rollback
-
-```powershell
-dsh plugin --profile web remove dsh-git-bash
-# then restart DSH
-```
-
-If anything misbehaves, you can instead switch off just the `git-bash-executor` and `git-bash-tool` rows in the panel and restart — the tool and the executor are separable.
+**Not available yet.** This fork has not been published to GitHub or npm. Installation, upgrade, and uninstall commands will be added here after publication.
 
 ---
 
@@ -231,7 +165,7 @@ Set the `DSH_GIT_BASH` environment variable to any bash executable.
 ## Development
 
 ```text
-dsh-gitbash/      # repository name; the package stays dsh-git-bash
+dsh-git-bash/         # this fork; package @idlercloud/dsh-git-bash
 ├─ cordis.patch.yml   # composition patch: isolation scope + two rows
 ├─ lib/index.js       # the executor plugin (~30 lines of core code)
 ├─ test/harness.mjs   # offline harness driven by a real cordis, no DSH boot needed
@@ -250,7 +184,7 @@ The harness checks that the host shell was not replaced, that the isolation scop
 Packaging:
 
 ```bash
-npm pack   # produces dsh-git-bash-0.1.0.tgz
+npm pack
 ```
 
 ---

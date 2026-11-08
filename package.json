@@ -1,7 +1,7 @@
 {
-  "name": "dsh-git-bash",
-  "version": "0.1.3",
-  "description": "Mount DSH's stock bash tool on Windows against Git Bash (no PowerShell in the path).",
+  "name": "@idlercloud/dsh-git-bash",
+  "version": "0.2.0",
+  "description": "Git for Windows bash tool for DSH on Windows; fork of Fishquito7/dsh-gitbash.",
   "type": "module",
   "main": "lib/index.js",
   "exports": {
@@ -11,6 +11,11 @@
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
+    },
+    "compatibility": {
+      "dshReleases": {
+        "0.2.2-rc.1": "compatible"
+      }
     }
   },
   "files": [
@@ -20,14 +25,18 @@
     "README.md",
     "README.en.md"
   ],
+  "engines": {
+    "node": "^22.19 || >=24",
+    "dsh": ">=0.2.2-rc.1 <0.2.3-0"
+  },
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Fishquito7/dsh-gitbash.git"
+    "url": "git+https://github.com/idlercloud/dsh-git-bash.git"
   },
-  "homepage": "https://github.com/Fishquito7/dsh-gitbash#readme",
+  "homepage": "https://github.com/idlercloud/dsh-git-bash#readme",
   "bugs": {
-    "url": "https://github.com/Fishquito7/dsh-gitbash/issues"
+    "url": "https://github.com/idlercloud/dsh-git-bash/issues"
   },
   "keywords": [
     "dsh",

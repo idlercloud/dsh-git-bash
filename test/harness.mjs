@@ -11,7 +11,7 @@
 import { spawn as nodeSpawn } from 'node:child_process';
 import { Context } from '@deepseek-ai/cordis';
 import { LocalBashExecutor } from '@deepseek-ai/dsh-bash-local';
-import * as plugin from 'dsh-git-bash';
+import * as plugin from '@idlercloud/dsh-git-bash';
 
 const CONFIG = {
   cwd: process.cwd(),
@@ -102,7 +102,7 @@ record('C4 stderr 文本', JSON.stringify(r5.stderr.text.trim().slice(0, 90)));
 
 
 // ---- D) 解析链与报错质量 ----
-import { candidateBashPaths as probeCandidates, resolveBashPath as probeResolve } from 'dsh-git-bash';
+import { candidateBashPaths as probeCandidates, resolveBashPath as probeResolve } from '@idlercloud/dsh-git-bash';
 try { record('D1 自动解析结果', probeResolve()); } catch (e) { record('D1 自动解析结果', 'FAIL ' + e.message.split(String.fromCharCode(10))[0]); }
 record('D2 候选数量', probeCandidates().length);
 record('D3 候选前两条', probeCandidates().slice(0, 2).join('  |  '));

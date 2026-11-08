@@ -1,12 +1,8 @@
-# dsh-gitbash
-
+# @idlercloud/dsh-git-bash
 
 <p align="center">
   <b>给 DSH 在 Windows 上装一个真正的 bash 工具：调用 bash 不用再经过 pwsh 转义，告别转义地狱。</b>
 </p>
-
-
-
 
 <p align="center">
   <a href="README.en.md">English</a> · <b>中文</b>
@@ -23,6 +19,7 @@
   <img alt="deps" src="https://img.shields.io/badge/dependencies-0-brightgreen?style=flat-square">
 </p>
 
+> **本仓库是 [`Fishquito7/dsh-gitbash`](https://github.com/Fishquito7/dsh-gitbash) 的 fork。** 基线为上游 v0.1.3，包名改为 `@idlercloud/dsh-git-bash`，模型看到的工具名仍是 `bash`。本 fork 尚未发布到 GitHub 或 npm，安装暂不可用。
 
 ---
 
@@ -67,77 +64,9 @@ echo "dollar=$HOME"; ls *.ts | head -3
 
 ---
 
-## 安装
+## 安装、升级与卸载
 
-> `--profile` 后面换成你实际使用的 profile 名（Web 界面默认是 `web`）。
-
-### 方式一：GitHub Release tarball
-
-```powershell
-dsh plugin --profile web add "https://github.com/Fishquito7/dsh-gitbash/releases/latest/download/dsh-git-bash.tgz"
-```
-
-`releases/latest/download/` 永远指向最新一版。要锁版本就换成带 tag 的地址，例如：
-
-```text
-https://github.com/Fishquito7/dsh-gitbash/releases/download/v0.1.0/dsh-git-bash-0.1.0.tgz
-```
-
-> **备选：直接从 GitHub 仓库安装**
->
-> ```powershell
-> dsh plugin --profile web add "github:Fishquito7/dsh-gitbash"
-> ```
->
-> 这条路会直接走 pnpm 的依赖流程，部分环境会因为构建脚本策略被拒（pnpm 报 `ignored build scripts` 之类）。装不上就回到方式一。
-
-### 方式二：本地安装
-
-已经手动下载了 tarball，或者要装本地源码目录：
-
-```powershell
-# 本地 tarball
-dsh plugin --profile web add "file:C:/path/to/dsh-git-bash-0.1.0.tgz"
-
-# 本地源码目录（边改边试）
-dsh plugin --profile web add "file:C:/path/to/dsh-gitbash"
-```
-
-### 然后重启 DSH
-
-新装的 bundle 属于"新模块根"，**不在热重载范围**，必须重启 host 才会出现 `bash` 工具。
-
-### 验证
-
-重启后看一眼插件面板：`git-bash-executor` 与 `git-bash-tool` 都应为"运行中"。再让模型跑一下：
-
-```bash
-echo "argv0=$0"; uname -s; echo "bash=$BASH_VERSION"
-# 期望：/usr/bin/bash、MINGW64_NT-...、bash 5.x
-```
-
----
-
-## 升级
-
-pnpm 不会自动重新拉取同名依赖，所以升级要**先移除再安装**：
-
-```powershell
-dsh plugin --profile web remove dsh-git-bash
-dsh plugin --profile web add "https://github.com/Fishquito7/dsh-gitbash/releases/latest/download/dsh-git-bash.tgz"
-```
-
-然后重启 DSH。想锁版本就把 URL 换成带 tag 的形式。
-
----
-## 卸载与回滚
-
-```powershell
-dsh plugin --profile web remove dsh-git-bash
-# 然后重启 DSH
-```
-
-面板里出现异常时，也可以只关掉 `git-bash-executor` / `git-bash-tool` 两个开关再重启 —— 工具与执行器是分离的。
+**暂不可用。** 本 fork 尚未发布到 GitHub 或 npm；发布后在这里补安装、升级和卸载命令。
 
 ---
 
@@ -238,10 +167,10 @@ isolate 隔离作用域  tool-bash ──► ctx.shell（隔离作用域）  = G
 ## 开发
 
 ```text
-dsh-gitbash/      # 仓库名；包名仍是 dsh-git-bash
+dsh-git-bash/         # 本 fork 仓库；包名 @idlercloud/dsh-git-bash
 ├─ cordis.patch.yml   # 组合补丁：隔离作用域 + 两行声明
 ├─ lib/index.js       # 执行器插件（核心约 30 行）
-├─ test/harness.mjs   # 离线验证脚本（真实 cordis 驱动，无需启动 DSH）
+├─ test/harness.mjs   # 离线集成脚本（真实 cordis 驱动，无需启动 DSH）
 ├─ package.json       # 零依赖
 └─ README.md
 ```
@@ -257,7 +186,7 @@ node test/harness.mjs
 打包：
 
 ```bash
-npm pack   # 产出 dsh-git-bash-0.1.0.tgz
+npm pack
 ```
 
 ---

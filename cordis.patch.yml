@@ -1,4 +1,4 @@
-# dsh-git-bash bundle patch.
+# @idlercloud/dsh-git-bash bundle patch.
 #
 # 把两行绑进同一个 "shell" 隔离 realm —— 不需要容器行：
 # loader 的 isolate 支持两种形态，isolate: <字符串> 会创建一个
@@ -11,7 +11,7 @@
 # 想换 Git Bash 路径：设置环境变量 DSH_GIT_BASH，或改 lib/index.js 里的默认常量。
 - insert:
     - id: git-bash-executor
-      name: dsh-git-bash
+      name: '@idlercloud/dsh-git-bash'
       isolate:
         shell: dsh-git-bash
 
