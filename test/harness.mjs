@@ -32,28 +32,48 @@ function makeSubprocess() {
       });
       let out = '';
       let err = '';
-      child.stdout.on('data', function (d) { out += d.toString('utf8'); });
-      child.stderr.on('data', function (d) { err += d.toString('utf8'); });
-      const done = new Promise(function (resolve) {
-        child.on('close', function (code, signal) { resolve({ exitCode: code, signal: signal || null }); });
+      child.stdout.on('data', (d) => {
+        out += d.toString('utf8');
       });
-      const reader = function (get) {
-        return { readFrom: function (offset) { return { text: get().slice(offset), nextOffset: get().length, lossy: false }; } };
+      child.stderr.on('data', (d) => {
+        err += d.toString('utf8');
+      });
+      const done = new Promise((resolve) => {
+        child.on('close', (code, signal) => {
+          resolve({ exitCode: code, signal: signal || null });
+        });
+      });
+      const reader = (get) => ({
+        readFrom: (offset) => ({ text: get().slice(offset), nextOffset: get().length, lossy: false }),
+      });
+      return {
+        done: done,
+        collected: { stdout: reader(() => out), stderr: reader(() => err) },
+        kill: () => {
+          child.kill();
+        },
       };
-      return { done: done, collected: { stdout: reader(function () { return out; }), stderr: reader(function () { return err; }) }, kill: function () { child.kill(); } };
     },
   };
 }
 
-const tick = function () { return new Promise(function (r) { setTimeout(r, 60); }); };
+const tick = () =>
+  new Promise((r) => {
+    setTimeout(r, 60);
+  });
 const rows = [];
-const record = function (label, value) { rows.push(String(label).padEnd(38) + ' : ' + String(value)); };
+const record = (label, value) => {
+  rows.push(`${String(label).padEnd(38)} : ${String(value)}`);
+};
 
 const root = new Context();
 root.provide('subprocess', makeSubprocess());
 let installs = 0;
 root.provide('settings', {
-  installSection: function () { installs += 1; throw new Error('settings namespace "shell" is already registered'); },
+  installSection: () => {
+    installs += 1;
+    throw new Error('settings namespace "shell" is already registered');
+  },
 });
 root.provide('shell', 'PWSH-EXECUTOR-PLACEHOLDER');
 
@@ -62,7 +82,7 @@ const realm = root.isolate('shell');
 realm.plugin(plugin, CONFIG);
 await tick();
 record('A1 宿主 root.shell 未变', root.shell === 'PWSH-EXECUTOR-PLACEHOLDER');
-record('A2 realm.shell 是本插件执行器', realm.shell && realm.shell.constructor.name);
+record('A2 realm.shell 是本插件执行器', realm.shell?.constructor.name);
 record('A3 settings.installSection 次数(期望0)', installs);
 
 // ---- B) 对照：直接挂父类（不做屏蔽） ----
@@ -71,15 +91,17 @@ let bErr = 'none';
 try {
   realm2.plugin(LocalBashExecutor, CONFIG);
   await tick();
-  bErr = 'mounted, installSection 次数=' + installs;
-} catch (e) { bErr = 'throws: ' + e.message; }
+  bErr = `mounted, installSection 次数=${installs}`;
+} catch (e) {
+  bErr = `throws: ${e.message}`;
+}
 record('B1 直接挂父类的结果', bErr);
 record('B2 屏蔽后总次数(应=1)', installs);
 
 // ---- C) 真跑命令 ----
 // 兼容两代 seam：新版走 resolve() + execute() -> ShellProcess.result()；
 // 旧版走 resolve() + run() -> { result }。
-const run = async function (command) {
+const run = async (command) => {
   const spec = realm.shell.resolve({ command: command });
   if (typeof realm.shell.execute === 'function') {
     const proc = await realm.shell.execute(spec);
@@ -100,16 +122,26 @@ record('C3 非零退出码透传', r3.exitCode);
 const r5 = await run('echo out; ls /nonexistent-xyz >/dev/null');
 record('C4 stderr 文本', JSON.stringify(r5.stderr.text.trim().slice(0, 90)));
 
-
 // ---- D) 解析链与报错质量 ----
 import { candidateBashPaths as probeCandidates, resolveBashPath as probeResolve } from '@idlercloud/dsh-git-bash';
-try { record('D1 自动解析结果', probeResolve()); } catch (e) { record('D1 自动解析结果', 'FAIL ' + e.message.split(String.fromCharCode(10))[0]); }
+
+try {
+  record('D1 自动解析结果', probeResolve());
+} catch (e) {
+  record('D1 自动解析结果', `FAIL ${e.message.split(String.fromCharCode(10))[0]}`);
+}
 record('D2 候选数量', probeCandidates().length);
 record('D3 候选前两条', probeCandidates().slice(0, 2).join('  |  '));
 const savedBash = process.env.DSH_GIT_BASH;
 process.env.DSH_GIT_BASH = 'C:\\nope\\bash.exe';
-try { probeResolve(); record('D4 显式指向不存在', '未抛错(意外)'); } catch (e) { record('D4 显式指向不存在', e.message.slice(0, 95)); }
-if (savedBash === undefined) delete process.env.DSH_GIT_BASH; else process.env.DSH_GIT_BASH = savedBash;
+try {
+  probeResolve();
+  record('D4 显式指向不存在', '未抛错(意外)');
+} catch (e) {
+  record('D4 显式指向不存在', e.message.slice(0, 95));
+}
+if (savedBash === undefined) delete process.env.DSH_GIT_BASH;
+else process.env.DSH_GIT_BASH = savedBash;
 
 // ---- E) 回归：上游内部方法改名/消失后，替换缝仍然生效 ----
 // 直接调用基类的 execute —— 它写死了裸 "bash"，等于模拟"某个未来版本又换掉了
@@ -126,16 +158,27 @@ const cfgF1 = realm.shell.spawnSpec(specF, ['bash', '-c', 'echo hi'], 64000, und
 record('F1 裸 bash 换成解析结果', cfgF1.argv[0]);
 const cfgF2 = realm.shell.spawnSpec(specF, ['git', 'status'], 64000, undefined);
 record('F2 非 bash 原样透传', JSON.stringify(cfgF2.argv));
-const cfgF3 = realm.shell.spawnSpec(specF, ['C:\\Program Files\\Git\\bin\\bash.exe', '-c', 'echo hi'], 64000, undefined);
+const cfgF3 = realm.shell.spawnSpec(
+  specF,
+  ['C:\\Program Files\\Git\\bin\\bash.exe', '-c', 'echo hi'],
+  64000,
+  undefined,
+);
 record('F3 绝对路径不被动', cfgF3.argv[0]);
 record('F4 spawn 配置其余字段仍在', JSON.stringify([typeof cfgF1.cwd, typeof cfgF1.stdio, cfgF1.graceMs]));
 
 // ---- G) 自检日志：首次执行时走公开路径确认 shell 身份 ----
 await tick();
 await tick();
-const logged = (root.logger && root.logger.buffer ? root.logger.buffer : []).map(function (m) {
-  try { return JSON.stringify(m); } catch (e) { return String(m); }
-}).join(' ');
+const logged = (root.logger?.buffer ? root.logger.buffer : [])
+  .map((m) => {
+    try {
+      return JSON.stringify(m);
+    } catch (_e) {
+      return String(m);
+    }
+  })
+  .join(' ');
 record('G0 挂载日志里有解析结果', /bash\.exe ->/.test(logged));
 record('G1 自检结论', /self-check ok/.test(logged) ? 'ok' : logged.slice(0, 180));
 
@@ -144,7 +187,7 @@ const realm3 = root.isolate('shell');
 realm3.plugin(plugin, Object.assign({}, CONFIG, { bashPath: 'C:\\nope\\explicit\\bash.exe' }));
 await tick();
 try {
-  record('H1 bashPath 覆盖生效', '未抛错(意外): ' + probeResolve());
+  record('H1 bashPath 覆盖生效', `未抛错(意外): ${probeResolve()}`);
 } catch (e) {
   record('H1 bashPath 覆盖生效', e.message.slice(0, 88));
 }
