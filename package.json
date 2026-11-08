@@ -29,6 +29,14 @@
     "node": "^22.19 || >=24",
     "dsh": ">=0.2.2-rc.1 <0.2.3-0"
   },
+  "scripts": {
+    "test": "node --test \"test/*.test.mjs\"",
+    "lint": "biome lint .",
+    "format": "biome format --write .",
+    "format:check": "biome format .",
+    "check": "biome check .",
+    "check:fix": "biome check --write ."
+  },
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -45,5 +53,8 @@
     "bash",
     "git-bash",
     "windows"
-  ]
+  ],
+  "devDependencies": {
+    "@biomejs/biome": "2.6.6"
+  }
 }
