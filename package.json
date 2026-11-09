@@ -54,7 +54,13 @@
     "git-bash",
     "windows"
   ],
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "4.1.0",
+    "@deepseek-ai/dsh-bash-local": "0.2.2-rc.1"
+  },
   "devDependencies": {
-    "@biomejs/biome": "2.6.6"
+    "@biomejs/biome": "2.6.6",
+    "@deepseek-ai/cordis": "4.1.0",
+    "@deepseek-ai/dsh-bash-local": "0.2.2-rc.1"
   }
 }
