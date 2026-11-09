@@ -121,19 +121,21 @@ const r5 = await run('echo out; ls /nonexistent-xyz >/dev/null');
 record('C4 stderr 文本', JSON.stringify(r5.stderr.text.trim().slice(0, 90)));
 
 // ---- D) 解析链与报错质量 ----
-import { candidateBashPaths as probeCandidates, resolveBashPath as probeResolve } from '@idlercloud/dsh-git-bash';
+import { BashResolver as ProbeResolver } from '@idlercloud/dsh-git-bash';
 
+const probe = new ProbeResolver();
 try {
-  record('D1 自动解析结果', probeResolve());
+  record('D1 自动解析结果', probe.resolve());
 } catch (e) {
   record('D1 自动解析结果', `FAIL ${e.message.split(String.fromCharCode(10))[0]}`);
 }
-record('D2 候选数量', probeCandidates().length);
-record('D3 候选前两条', probeCandidates().slice(0, 2).join('  |  '));
+record('D2 候选数量', probe.candidates().length);
+record('D3 候选前两条', probe.candidates().slice(0, 2).join('  |  '));
 const savedBash = process.env.DSH_GIT_BASH;
 process.env.DSH_GIT_BASH = 'C:\\nope\\bash.exe';
 try {
-  probeResolve();
+  // 新解析器，避免命中 D1 的缓存；显式配置会重新校验。
+  new ProbeResolver().resolve();
   record('D4 显式指向不存在', '未抛错(意外)');
 } catch (e) {
   record('D4 显式指向不存在', e.message.slice(0, 95));
@@ -185,12 +187,14 @@ record('I4 无会话按实例默认模式放行', (await preExecute(bashCall(und
 sandbox.mode = 'workspace-write';
 record('I5 无会话且实例默认模式受限时拒绝', (await preExecute(bashCall(undefined))).kind);
 
-// ---- H) 行 config 的 bashPath 覆盖（模块级配置，放在最后） ----
+// ---- H) config 的 bashPath 覆盖（每次挂载独立解析器，放在最后） ----
 const realm3 = root.isolate('shell');
 realm3.plugin(plugin, Object.assign({}, CONFIG, { bashPath: 'C:\\nope\\explicit\\bash.exe' }));
 await tick();
 try {
-  record('H1 bashPath 覆盖生效', `未抛错(意外): ${probeResolve()}`);
+  const specH = realm3.shell.resolve({ command: 'echo hi' });
+  realm3.shell.spawnSpec(specH, ['bash', '-c', 'echo hi'], 64000, undefined);
+  record('H1 bashPath 覆盖生效', '未抛错(意外)');
 } catch (e) {
   record('H1 bashPath 覆盖生效', e.message.slice(0, 88));
 }

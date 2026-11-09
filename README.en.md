@@ -68,19 +68,33 @@ The command string goes straight to `bash -c` and is parsed by bash rules exactl
 
 ## Configuration
 
+```yaml
+- id: git-bash-executor
+  name: '@idlercloud/dsh-git-bash'
+  config:
+    bashPath: 'C:\Program Files\Git\bin\bash.exe'
+```
+
 | Item | Meaning |
 |---|---|
-| `bashPath` (row `config`) | Explicit absolute path to `bash.exe`; highest priority |
+| `bashPath` | Explicit absolute path to `bash.exe`; highest priority |
 | `DSH_GIT_BASH` | The same override through the environment |
-| Row `config` | All upstream `dsh-bash-local` fields are accepted: `cwd`, `timeoutMs`, `maxTimeoutMs`, `maxOutputBytes`, `maxSpillBytes`, `graceMs` |
+| `config` | All upstream `dsh-bash-local` fields are accepted: `cwd`, `timeoutMs`, `maxTimeoutMs`, `maxOutputBytes`, `maxSpillBytes`, `graceMs` |
 
 **No configuration is needed.** Git can live almost anywhere depending on install flavour (machine-wide, per-user, scoop, chocolatey), so the plugin looks for it in order:
 
-> row `config` `bashPath` → environment `DSH_GIT_BASH` → the `InstallPath` value under `HKLM` / `HKCU` `SOFTWARE\GitForWindows` → `%ProgramFiles%\Git\bin` → `%ProgramFiles(x86)%` → `%ProgramW6432%` → `%LOCALAPPDATA%\Programs\Git\bin` (per-user installs) → scoop → chocolatey → `bash.exe` in each PATH entry, plus `..\bin\bash.exe` next to any `git.exe`.
+> 1. the `bashPath` in `config`, or the `DSH_GIT_BASH` environment variable
+> 2. `GIT_INSTALL_ROOT` (set by Scoop's git package)
+> 3. the `InstallPath` value under `SOFTWARE\GitForWindows`, checking `HKCU`, `HKLM`, then `HKLM\SOFTWARE\WOW6432Node`
+> 4. well-known locations: `%ProgramFiles%\Git\bin`, `%ProgramFiles(x86)%`, `%ProgramW6432%`, `%LOCALAPPDATA%\Programs\Git\bin`, `%USERPROFILE%\scoop`, Chocolatey
+> 5. the install root implied by each `where git` hit
+> 6. direct `where bash` hits
 >
-> That last one matters: **Git's installer puts `Git\cmd` on PATH and never `Git\bin`** — which is exactly why a bare `bash` is not found on Windows.
+> The explicit config and every existing candidate run `uname -s`; only `MINGW` / `MSYS` is accepted, and the WSL launcher `System32\bash.exe` is rejected.
 >
 > If every candidate fails, the plugin does **not** fall back to WSL's `bash` (a Linux process in another kernel, wrong semantics); it reports an error listing every path it tried.
+
+The resolved path is cached: a cache hit only checks that the file still exists, without re-running `uname -s`, the registry or `where`. The cache is dropped when the file disappears, and reset when `config` changes.
 
 ---
 
@@ -120,7 +134,7 @@ isolate scope      tool-bash ──► ctx.shell (isolation scope)  = Git Bash e
 
 - **No file sandboxing, so it runs only under full access**: Git Bash is an MSYS2 process that needs fork, pipes and a private temp directory, which behaves unreliably under the Windows restricted token, so this plugin has no sandbox backend. Rather than pretending otherwise, it denies at `tools/pre-execute` according to the file policy — the session's policy when there is one, the default policy otherwise: only a call resolving to `danger-full-access` executes; under `read-only`, `workspace-write`, a missing policy, or a failed resolution the command is stopped before spawn and before background-job admission, and the model receives a denial carrying `SANDBOX_UNAVAILABLE` plus the two real options — use `pwsh`, or ask the user to switch the access mode.
 - **Bound to one choke point, not to upstream entry-point names**: `dsh-bash-local`'s subclass entry points have already been renamed once (`run`/`start` + `runArgv`/`startArgv` → `execute`/`executeArgv`), yet every execution path still funnels through `spawnSpec(spec, argv, …)` to turn an argv into a spawn config. The plugin swaps the bare `bash` for the resolved Git Bash exactly there, so another rename of an entry point cannot silently fall back to bare `bash`; the `execute` / `run` / `start` entry methods are also overridden to hand upstream the resolved absolute path (so the argv stays correct when the entry names survive but `spawnSpec` is renamed or bypassed). Whether that choke point still applies is verified by the offline harness (section E calls the base-class `execute` directly), not by a runtime self-check.
-- **Read-only, no environment changes**: resolution only reads the registry and reverse-engineers `PATH`; it never edits `PATH`, the registry or DSH itself, so a DSH upgrade needs no reconfiguration.
+- **Read-only, no environment changes**: resolution only reads the registry, environment variables and `where`; it never edits `PATH`, the registry or DSH itself, so a DSH upgrade needs no reconfiguration.
 - **`file:` dependencies are copies, not symlinks**: after editing the code you must `remove` → `add` → restart for the change to take effect.
 - **Windows only**: on POSIX platforms DSH already ships a bash tool, so this plugin has nothing to add.
 
@@ -155,10 +169,10 @@ This also explains why upstream disables `dsh-bash-local` outright on win32: a b
 
 **Q: Git is not installed on C:, or lives somewhere unusual — will the plugin find it?**
 
-Yes. The first link in the chain has nothing to do with install location: Git for Windows registers itself under `HKLM\SOFTWARE\GitForWindows` (`HKCU` for per-user installs) in the `InstallPath` value. The full order is in the Configuration section above. If nothing is found, the error lists every path that was tried and tells you how to set `bashPath` or `DSH_GIT_BASH` explicitly.
+Yes. The first two links have nothing to do with install location: the official installer registers the install directory under `HKLM\SOFTWARE\GitForWindows` (`WOW6432Node` for 32-bit installs, `HKCU` for per-user installs) in the `InstallPath` value, and Scoop's git sets `GIT_INSTALL_ROOT`. The full order is in the Configuration section above. If nothing is found, the error lists every path that was tried and tells you how to set `bashPath` or `DSH_GIT_BASH` explicitly.
 
 **Q: Can I switch to a different bash?**
-Set the `DSH_GIT_BASH` environment variable to any bash executable.
+Only Git Bash (`MINGW` / `MSYS`) is supported for now; the system prompt is written for MSYS semantics.
 
 ---
 
