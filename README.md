@@ -122,8 +122,8 @@ isolate 隔离作用域  tool-bash ──► ctx.shell（隔离作用域）  = G
 
 ## 边界与已知限制
 
-- **不经过文件沙箱**：命令以 DSH 进程自身的权限执行，不会产生 `[sandbox: file access denied]` 之类的提示。原因很实际 —— Git Bash 是 MSYS2 进程，在 Windows 受限令牌下需要 fork、管道与私有临时目录，行为不可靠，因此有意不接沙箱。
-- **只跟一个收口点，不跟上游的入口命名**：上游 `dsh-bash-local` 的子类入口改过名（`run`/`start` + `runArgv`/`startArgv` → `execute`/`executeArgv`），但每条执行路径最终都要经过 `spawnSpec(spec, argv, …)` 把 argv 落成 spawn 配置。本插件就在这个收口点把裸 `bash` 换成解析出来的 Git Bash，所以入口再改名也不会退回裸 `bash`；命名过的入口照旧覆盖一层，作为第二道保险。首次执行时还会走一遍公开路径（`resolve` → `execute` → `result`）自检并把 shell 身份写进日志 —— 万一上游连收口点都换掉，日志里会直接出现 `self-check FAILED`，而不是让命令输出一片乱码。
+- **不经过文件沙箱，因此只在完全权限下运行**：Git Bash 是 MSYS2 进程，在 Windows 受限令牌下需要 fork、管道与私有临时目录，行为不可靠，所以本插件没有可用的沙箱后端。补齐方式不是假装有沙箱，而是在 `tools/pre-execute` 里按文件策略拒绝：有会话时读该会话的策略，没有会话时读实例默认模式；只有解析为 `danger-full-access` 的调用会执行，`read-only`、`workspace-write`、策略缺失或解析失败时，命令在 spawn 与后台任务登记之前就被挡下，模型拿到一条带 `SANDBOX_UNAVAILABLE` 的拒绝，并被告知改用 `pwsh` 或让用户切换访问模式。
+- **只跟一个收口点，不跟上游的入口命名**：上游 `dsh-bash-local` 的子类入口改过名（`run`/`start` + `runArgv`/`startArgv` → `execute`/`executeArgv`），但每条执行路径最终都要经过 `spawnSpec(spec, argv, …)` 把 argv 落成 spawn 配置。本插件就在这个收口点把裸 `bash` 换成解析出来的 Git Bash，所以入口再改名也不会退回裸 `bash`；`execute` / `run` / `start` 三个入口也覆盖一层，直接把解析好的绝对路径交给上游（入口名没变、`spawnSpec` 被改名或绕过时，argv 仍然正确）。这条收口点是否仍然生效由离线 harness（E 段直接调用基类 `execute`）验证，不在运行时自检。
 - **只读、不动环境**：解析全程只读注册表并反推 PATH；不改 `PATH`、不改注册表、不改 DSH 自身，升级 DSH 后不需要任何额外配置。
 - **`file:` 依赖是拷贝，不是软链**：改完代码后要 `remove` → `add` → 重启才会生效。
 - **仅 Windows 需要**：POSIX 平台上 DSH 本来就有 bash 工具，装这个插件没有意义。
@@ -181,7 +181,7 @@ dsh-git-bash/         # 本 fork 仓库；包名 @idlercloud/dsh-git-bash
 node test/harness.mjs
 ```
 
-脚本会检查：宿主 shell 未被顶替、隔离作用域内解析到本执行器、设置段零重复注册、真实 Git Bash 身份、通配符与 `$(...)` 展开、退出码透传、stderr 分离、`spawnSpec` 收口点仍把裸 `bash` 换成 Git Bash（即上游入口改名后走的路径）、以及首次执行的自检结论。
+脚本会检查：宿主 shell 未被顶替、隔离作用域内解析到本执行器、设置段零重复注册、真实 Git Bash 身份、通配符与 `$(...)` 展开、退出码透传、stderr 分离、`spawnSpec` 收口点仍把裸 `bash` 换成 Git Bash（即上游入口改名后走的路径），以及非完全权限的调用在 spawn 之前被拒绝。
 
 打包：
 

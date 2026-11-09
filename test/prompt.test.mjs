@@ -12,7 +12,7 @@ import { describe, it } from 'node:test';
 import { GIT_BASH_PROMPT, installGitBashPrompt, SECTION_NAME } from '../lib/prompt.js';
 
 /**
- * 宿主 systemPrompt 服务的最小替身。
+ * 宿主 systemPrompt 服务的最小实现。
  *
  * orders 模拟宿主的 SECTION_ORDERS 表：表里没有的名字返回 undefined，与真服务一致。
  */
@@ -29,7 +29,7 @@ function fakePrompt({ orders = { TOOL_BASH: 1000 } } = {}) {
   };
 }
 
-/** 插件 context 的最小替身：effect 立刻执行并按标签记账。 */
+/** 插件 context 的最小实现：effect 立刻执行并按标签记账。 */
 function fakeCtx({ prompt, logger } = {}) {
   const effects = [];
   return {

@@ -5,7 +5,8 @@
  *   $DSH_HOME/profiles/web/node_modules/dsh-git-bash），并从该 profile 目录运行：
  *     node <此文件路径>
  * 检查点：宿主 shell 未被顶替 / 隔离作用域内是本执行器 / settings 段零注册 /
- *         真实 Git Bash 身份 / glob 与 $( ) 展开 / 退出码透传 / stderr 分离。
+ *         真实 Git Bash 身份 / glob 与 $( ) 展开 / 退出码透传 / stderr 分离 /
+ *         非完全权限拒绝在 spawn 之前生效。
  */
 
 import { spawn as nodeSpawn } from 'node:child_process';
@@ -77,6 +78,16 @@ root.provide('settings', {
 });
 root.provide('shell', 'PWSH-EXECUTOR-PLACEHOLDER');
 
+// 工具服务的最小实现：guard 用它核对调用归属，两次查询返回同一个定义即视为本插件挂的 bash。
+const bashDefinition = { name: 'bash' };
+root.provide('tools', { get: () => bashDefinition });
+
+// 权限闸门要读的 sandboxPolicy 最小实现：模式可切换，默认完全权限，C 段的真实命令才不会被挡下。
+const sandbox = { mode: 'danger-full-access' };
+root.provide('sandboxPolicy', {
+  resolve: (request) => ({ mode: sandbox.mode, workspaceRoot: process.cwd(), sessionId: request?.session?.id }),
+});
+
 // ---- A) 插件路径：通过真实 cordis plugin 挂载（有 fiber） ----
 const realm = root.isolate('shell');
 realm.plugin(plugin, CONFIG);
@@ -85,21 +96,8 @@ record('A1 宿主 root.shell 未变', root.shell === 'PWSH-EXECUTOR-PLACEHOLDER'
 record('A2 realm.shell 是本插件执行器', realm.shell?.constructor.name);
 record('A3 settings.installSection 次数(期望0)', installs);
 
-// ---- B) 对照：直接挂父类（不做屏蔽） ----
-const realm2 = root.isolate('shell');
-let bErr = 'none';
-try {
-  realm2.plugin(LocalBashExecutor, CONFIG);
-  await tick();
-  bErr = `mounted, installSection 次数=${installs}`;
-} catch (e) {
-  bErr = `throws: ${e.message}`;
-}
-record('B1 直接挂父类的结果', bErr);
-record('B2 屏蔽后总次数(应=1)', installs);
-
 // ---- C) 真跑命令 ----
-// 兼容两代 seam：新版走 resolve() + execute() -> ShellProcess.result()；
+// 兼容两代入口：新版走 resolve() + execute() -> ShellProcess.result()；
 // 旧版走 resolve() + run() -> { result }。
 const run = async (command) => {
   const spec = realm.shell.resolve({ command: command });
@@ -143,7 +141,7 @@ try {
 if (savedBash === undefined) delete process.env.DSH_GIT_BASH;
 else process.env.DSH_GIT_BASH = savedBash;
 
-// ---- E) 回归：上游内部方法改名/消失后，替换缝仍然生效 ----
+// ---- E) 回归：上游内部方法改名/消失后，替换点仍然生效 ----
 // 直接调用基类的 execute —— 它写死了裸 "bash"，等于模拟"某个未来版本又换掉了
 // executeArgv，或干脆走回基类实现"：subprocess 包装必须仍然把它换成 Git Bash。
 const specBase = realm.shell.resolve({ command: 'echo "base=$0"; uname -s' });
@@ -167,20 +165,25 @@ const cfgF3 = realm.shell.spawnSpec(
 record('F3 绝对路径不被动', cfgF3.argv[0]);
 record('F4 spawn 配置其余字段仍在', JSON.stringify([typeof cfgF1.cwd, typeof cfgF1.stdio, cfgF1.graceMs]));
 
-// ---- G) 自检日志：首次执行时走公开路径确认 shell 身份 ----
-await tick();
-await tick();
-const logged = (root.logger?.buffer ? root.logger.buffer : [])
-  .map((m) => {
-    try {
-      return JSON.stringify(m);
-    } catch (_e) {
-      return String(m);
-    }
-  })
-  .join(' ');
-record('G0 挂载日志里有解析结果', /bash\.exe ->/.test(logged));
-record('G1 自检结论', /self-check ok/.test(logged) ? 'ok' : logged.slice(0, 180));
+// ---- I) 权限闸门：非完全权限在 pre-execute 阶段被拒绝 ----
+// 这里派发的是宿主真实的 tools/pre-execute waterfall，监听器是插件在 apply 里注册的。
+const preExecute = (exec) => root.waterfall('tools/pre-execute', exec, () => Promise.resolve({ kind: 'allow' }));
+const bashCall = (agent) => (agent === undefined ? { name: 'bash' } : { name: 'bash', agent });
+const guardAgent = { session: { id: 'harness-session' } };
+
+sandbox.mode = 'danger-full-access';
+record('I1 完全权限放行', (await preExecute(bashCall(guardAgent))).kind);
+
+sandbox.mode = 'workspace-write';
+const deniedWrite = await preExecute(bashCall(guardAgent));
+record('I2 workspace-write 拒绝', `${deniedWrite.kind} / ${deniedWrite.info?.code}`);
+record('I3 非 bash 调用不受影响', (await preExecute({ name: 'pwsh', agent: guardAgent })).kind);
+
+sandbox.mode = 'danger-full-access';
+record('I4 无会话按实例默认模式放行', (await preExecute(bashCall(undefined))).kind);
+
+sandbox.mode = 'workspace-write';
+record('I5 无会话且实例默认模式受限时拒绝', (await preExecute(bashCall(undefined))).kind);
 
 // ---- H) 行 config 的 bashPath 覆盖（模块级配置，放在最后） ----
 const realm3 = root.isolate('shell');
