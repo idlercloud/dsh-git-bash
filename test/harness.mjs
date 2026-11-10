@@ -5,8 +5,8 @@
  *   dsh-bash-local@0.2.2-rc.1），再从仓库根目录运行：
  *     node test/harness.mjs
  * 检查点：宿主 shell 未被顶替 / 隔离作用域内是本执行器 / settings 段零注册 /
- *         真实 Git Bash 身份 / 交给 spawn 的 argv0 是解析结果 / glob 与 $( ) 展开 /
- *         退出码透传 / stderr 分离 / 非完全权限拒绝在 spawn 之前生效。
+ *         真实 Git Bash 身份 / 交给 spawn 的 argv0 是解析结果 / workdir 归一化 /
+ *         glob 与 $( ) 展开 / 退出码透传 / stderr 分离 / 非完全权限拒绝在 spawn 之前生效。
  */
 
 import { spawn as nodeSpawn } from 'node:child_process';
@@ -100,8 +100,8 @@ record('A2 realm.shell 是本插件执行器', realm.shell?.constructor.name);
 record('A3 settings.installSection 次数(期望0)', installs);
 
 // ---- C) 真跑命令 ----
-const run = async (command) => {
-  const spec = realm.shell.resolve({ command: command });
+const run = async (command, workdir) => {
+  const spec = realm.shell.resolve({ command: command, workdir: workdir });
   const proc = await realm.shell.execute(spec);
   return proc.result();
 };
@@ -118,6 +118,15 @@ record('C3 非零退出码透传', r3.exitCode);
 
 const r5 = await run('echo out; ls /nonexistent-xyz >/dev/null');
 record('C4 stderr 文本', JSON.stringify(r5.stderr.text.trim().slice(0, 90)));
+
+const r6 = await run('pwd', '/c/Windows');
+record('C5 workdir /c/... 归一化', r6.stdout.text.trim());
+try {
+  await run('pwd', '/tmp');
+  record('C6 无盘符 workdir 报错', '未抛错(意外)');
+} catch (e) {
+  record('C6 无盘符 workdir 报错', e.message.slice(0, 90));
+}
 
 // ---- D) 解析链与报错质量 ----
 import { BashResolver as ProbeResolver } from '@idlercloud/dsh-git-bash';
