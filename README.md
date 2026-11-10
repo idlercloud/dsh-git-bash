@@ -84,12 +84,13 @@ Git Bash 是 MSYS2 进程，在 Windows 受限令牌下需要 fork、管道与�
 
 ## 开发
 
-离线验证：
-
 ```bash
 npm install
+npm test
 node test/harness.mjs
 ```
+
+`npm test` 跑单测；`node test/harness.mjs` 用真实的 cordis 与 dsh-bash-local 驱动插件，不需要启动 DSH。
 
 ---
 

@@ -84,12 +84,13 @@ The resolved result is cached. When the cached file no longer exists, or the con
 
 ## Development
 
-Offline verification:
-
 ```bash
 npm install
+npm test
 node test/harness.mjs
 ```
+
+`npm test` runs the unit tests; `node test/harness.mjs` drives the plugin with a real cordis and dsh-bash-local, with no DSH boot needed.
 
 ---
 
