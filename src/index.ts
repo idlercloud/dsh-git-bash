@@ -111,6 +111,9 @@ class GitBashExecutor extends LocalBashExecutor {
  * @param config - 组合条目配置，可含 bashPath / cwd / timeoutMs 等。
  */
 export function apply(ctx: Context, config: PluginConfig): void {
+  // bundle 平台检查之外，直接加载插件时也不在其他平台注册执行器。
+  if (process.platform !== 'win32') return;
+
   const resolver = new BashResolver();
   resolver.configure(config.bashPath);
   installGitBashPrompt(ctx);

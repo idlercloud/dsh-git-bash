@@ -13,7 +13,10 @@
   },
   "dsh": {
     "bundle": {
-      "patch": "./cordis.patch.yml"
+      "patch": "./cordis.patch.yml",
+      "platforms": [
+        "win32"
+      ]
     },
     "compatibility": {
       "dshReleases": {
