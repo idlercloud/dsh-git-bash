@@ -1,17 +1,16 @@
 /**
  * 离线验证脚本：用真实 cordis + 真实 dsh-bash-local 驱动本插件，不需要启动 DSH。
  *
- * 运行前提：本包已位于某个 profile 的解析链上（例如 staged 到
- *   $DSH_HOME/profiles/web/node_modules/dsh-git-bash），并从该 profile 目录运行：
- *     node <此文件路径>
+ * 运行前提：仓库根目录已执行 npm install（devDependencies 里有 cordis 与
+ *   dsh-bash-local@0.2.2-rc.1），再从仓库根目录运行：
+ *     node test/harness.mjs
  * 检查点：宿主 shell 未被顶替 / 隔离作用域内是本执行器 / settings 段零注册 /
- *         真实 Git Bash 身份 / glob 与 $( ) 展开 / 退出码透传 / stderr 分离 /
- *         非完全权限拒绝在 spawn 之前生效。
+ *         真实 Git Bash 身份 / 交给 spawn 的 argv0 是解析结果 / glob 与 $( ) 展开 /
+ *         退出码透传 / stderr 分离 / 非完全权限拒绝在 spawn 之前生效。
  */
 
 import { spawn as nodeSpawn } from 'node:child_process';
 import { Context } from '@deepseek-ai/cordis';
-import { LocalBashExecutor } from '@deepseek-ai/dsh-bash-local';
 import * as plugin from '@idlercloud/dsh-git-bash';
 
 const CONFIG = {
@@ -23,9 +22,13 @@ const CONFIG = {
   graceMs: 3000,
 };
 
+/** 每次 spawn 的 argv，C 段用来核对 execute 交给上游的 shell。 */
+const spawned = [];
+
 function makeSubprocess() {
   return {
     spawn(spec) {
+      spawned.push(spec.argv);
       const child = nodeSpawn(spec.argv[0], spec.argv.slice(1), {
         cwd: spec.cwd,
         env: Object.assign({}, process.env, spec.env || {}),
@@ -97,19 +100,15 @@ record('A2 realm.shell 是本插件执行器', realm.shell?.constructor.name);
 record('A3 settings.installSection 次数(期望0)', installs);
 
 // ---- C) 真跑命令 ----
-// 兼容两代入口：新版走 resolve() + execute() -> ShellProcess.result()；
-// 旧版走 resolve() + run() -> { result }。
 const run = async (command) => {
   const spec = realm.shell.resolve({ command: command });
-  if (typeof realm.shell.execute === 'function') {
-    const proc = await realm.shell.execute(spec);
-    return await proc.result();
-  }
-  return realm.shell.run(spec);
+  const proc = await realm.shell.execute(spec);
+  return proc.result();
 };
 
 const r1 = await run('echo "argv0=$0"; uname -s; echo "bash=$BASH_VERSION"');
 record('C1 shell 身份', JSON.stringify(r1.stdout.text.trim()));
+record('C1b 交给 spawn 的 argv0', spawned[0][0]);
 
 const r2 = await run('printf "%s|" *.ts; echo; echo "sub=$(pwd | tr / -)"; echo "single=$notvar"');
 record('C2 glob+子命令+单引号变量', JSON.stringify(r2.stdout.text.trim().slice(0, 160)));
@@ -143,30 +142,6 @@ try {
 if (savedBash === undefined) delete process.env.DSH_GIT_BASH;
 else process.env.DSH_GIT_BASH = savedBash;
 
-// ---- E) 回归：上游内部方法改名/消失后，替换点仍然生效 ----
-// 直接调用基类的 execute —— 它写死了裸 "bash"，等于模拟"某个未来版本又换掉了
-// executeArgv，或干脆走回基类实现"：subprocess 包装必须仍然把它换成 Git Bash。
-const specBase = realm.shell.resolve({ command: 'echo "base=$0"; uname -s' });
-const procBase = await LocalBashExecutor.prototype.execute.call(realm.shell, specBase);
-const rBase = await procBase.result();
-record('E1 基类裸 bash 仍走 Git Bash', JSON.stringify(rBase.stdout.text.trim()));
-record('E2 走基类时的退出码', rBase.exitCode);
-
-// ---- F) 收口点：spawnSpec 只换裸 bash，其余 argv 原样 ----
-const specF = realm.shell.resolve({ command: 'echo hi' });
-const cfgF1 = realm.shell.spawnSpec(specF, ['bash', '-c', 'echo hi'], 64000, undefined);
-record('F1 裸 bash 换成解析结果', cfgF1.argv[0]);
-const cfgF2 = realm.shell.spawnSpec(specF, ['git', 'status'], 64000, undefined);
-record('F2 非 bash 原样透传', JSON.stringify(cfgF2.argv));
-const cfgF3 = realm.shell.spawnSpec(
-  specF,
-  ['C:\\Program Files\\Git\\bin\\bash.exe', '-c', 'echo hi'],
-  64000,
-  undefined,
-);
-record('F3 绝对路径不被动', cfgF3.argv[0]);
-record('F4 spawn 配置其余字段仍在', JSON.stringify([typeof cfgF1.cwd, typeof cfgF1.stdio, cfgF1.graceMs]));
-
 // ---- I) 权限闸门：非完全权限在 pre-execute 阶段被拒绝 ----
 // 这里派发的是宿主真实的 tools/pre-execute waterfall，监听器是插件在 apply 里注册的。
 const preExecute = (exec) => root.waterfall('tools/pre-execute', exec, () => Promise.resolve({ kind: 'allow' }));
@@ -193,7 +168,7 @@ realm3.plugin(plugin, Object.assign({}, CONFIG, { bashPath: 'C:\\nope\\explicit\
 await tick();
 try {
   const specH = realm3.shell.resolve({ command: 'echo hi' });
-  realm3.shell.spawnSpec(specH, ['bash', '-c', 'echo hi'], 64000, undefined);
+  await realm3.shell.execute(specH);
   record('H1 bashPath 覆盖生效', '未抛错(意外)');
 } catch (e) {
   record('H1 bashPath 覆盖生效', e.message.slice(0, 88));
