@@ -138,7 +138,11 @@ it('真实 Git Bash 执行与插件隔离', async (t) => {
 
   // ---- C) 真跑命令 ----
   const run = async (command, workdir) => {
-    const spec = realm.shell.resolve({ command: command, workdir: workdir });
+    const spec = realm.shell.resolve({
+      command: command,
+      workdir: workdir,
+      sandboxPolicy: { mode: 'danger-full-access', workspaceRoot: process.cwd() },
+    });
     const proc = await realm.shell.execute(spec);
     return proc.result();
   };
@@ -234,7 +238,10 @@ it('真实 Git Bash 执行与插件隔离', async (t) => {
   await realm3.plugin(plugin, { ...CONFIG, bashPath: missingBash });
   await assert.rejects(
     async () => {
-      const specH = realm3.shell.resolve({ command: 'echo hi' });
+      const specH = realm3.shell.resolve({
+        command: 'echo hi',
+        sandboxPolicy: { mode: 'danger-full-access', workspaceRoot: process.cwd() },
+      });
       await realm3.shell.execute(specH);
     },
     { code: 'GIT_BASH_NOT_FOUND' },

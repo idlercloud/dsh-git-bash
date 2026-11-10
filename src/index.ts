@@ -23,7 +23,7 @@
 import type { Context } from '@deepseek-ai/cordis';
 import { type Config as BashConfig, LocalBashExecutor } from '@deepseek-ai/dsh-bash-local';
 import type { ShellExecRequest, ShellExecSpec, ShellExecution } from '@deepseek-ai/dsh-shell';
-import { FULL_ACCESS_MODE, installBashGuard } from './guard.js';
+import { bashDenialReason, FULL_ACCESS_MODE, installBashGuard } from './guard.js';
 import { installGitBashPrompt } from './prompt.js';
 import { BashResolver } from './resolve.js';
 import { normalizeWorkdir } from './workdir.js';
@@ -46,6 +46,19 @@ export type PluginConfig = BashConfig & { bashPath?: string };
  * 解析放在第一次 execute 里，挂载时不探测注册表、where 和 uname。
  */
 class GitBashExecutor extends LocalBashExecutor {
+  get sandboxMode() {
+    return FULL_ACCESS_MODE;
+  }
+
+  assertPolicy(spec: Pick<ShellExecRequest, 'sandboxPolicy'>): void {
+    const reason = bashDenialReason({ mode: spec.sandboxPolicy?.mode });
+    if (reason) {
+      const error: NodeJS.ErrnoException = new Error(reason);
+      error.code = 'GIT_BASH_POLICY_DENIED';
+      throw error;
+    }
+  }
+
   gitBashResolver: BashResolver;
   gitBashPathLogged = false;
 
@@ -66,6 +79,7 @@ class GitBashExecutor extends LocalBashExecutor {
    * @returns 执行规格，`workdir` 已换成 Windows 路径。
    */
   resolve(request: ShellExecRequest): ShellExecSpec {
+    this.assertPolicy(request);
     const spec = super.resolve(request);
     return { ...spec, workdir: normalizeWorkdir(spec.workdir) };
   }
@@ -80,6 +94,7 @@ class GitBashExecutor extends LocalBashExecutor {
    * @returns ShellExecution 句柄。
    */
   async execute(spec: ShellExecSpec): Promise<ShellExecution> {
+    this.assertPolicy(spec);
     const bashPath = this.gitBashResolver.resolve();
     if (!this.gitBashPathLogged) {
       this.gitBashPathLogged = true;
