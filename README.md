@@ -95,7 +95,7 @@ npm run test:git-bash
 
 `npm test` 会先构建，再运行单元测试和真实工具服务集成测试。集成测试通过真实 `ToolsService` 与工具执行流水线断言权限拦截，无需安装 Git Bash 或启动 DSH；由于插件只在 Windows 注册守卫，该用例在非 Windows 平台明确跳过。
 
-`npm run test:git-bash` 单独构建并运行 `test/harness.mjs`，需要 Windows 和可用的 Git Bash。它使用真实 cordis 与 dsh-bash-local 执行命令并输出检查结果，不属于默认测试集，也不需要启动 DSH。
+`npm run test:git-bash` 单独构建并运行 `test/harness.mjs`，需要 Windows 和可用的 Git Bash。它使用真实 cordis 与 dsh-bash-local 执行命令并断言检查结果，失败时返回非零退出码，不属于默认测试集，也不需要启动 DSH。
 
 ---
 

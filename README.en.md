@@ -95,7 +95,7 @@ npm run test:git-bash
 
 `npm test` builds and runs unit tests plus a real tool-service integration test. The integration test asserts permission enforcement through the real `ToolsService` and execution pipeline, without Git Bash or a running DSH instance. It explicitly skips non-Windows platforms because the plugin only registers its guard on Windows.
 
-`npm run test:git-bash` separately builds and runs `test/harness.mjs`, requiring Windows and an available Git Bash installation. It executes commands through real cordis and dsh-bash-local and prints inspection results. It is excluded from the default test suite and does not require starting DSH.
+`npm run test:git-bash` separately builds and runs `test/harness.mjs`, requiring Windows and an available Git Bash installation. It executes commands through real cordis and dsh-bash-local and asserts the results, returning a nonzero exit code on failure. It is excluded from the default test suite and does not require starting DSH.
 
 ---
 
