@@ -20,14 +20,14 @@ const MSYS_DRIVE = /^\/([A-Za-z])(?=\/|$)/;
  * @returns Windows 路径，或原值。
  * @throws `workdir` 是 `/tmp` 这类没有盘符的 MSYS 绝对路径时抛出。
  */
-export function normalizeWorkdir(value) {
-  if (typeof value !== 'string' || !value.startsWith('/')) return value;
+export function normalizeWorkdir(value: string): string {
+  if (!value.startsWith('/')) return value;
   // UNC 路径 `//server/share` 在 Windows 上有效，不按 MSYS 路径处理。
   if (value.startsWith('//')) return value;
 
   const match = MSYS_DRIVE.exec(value);
   if (!match) {
-    const error = new Error(
+    const error: NodeJS.ErrnoException = new Error(
       `dsh-git-bash: workdir "${value}" is an MSYS path with no Windows equivalent; ` +
         'pass a Windows path such as `C:/...`, and use MSYS paths only inside the command string.',
     );

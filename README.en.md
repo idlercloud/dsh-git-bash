@@ -84,13 +84,18 @@ The resolved result is cached. When the cached file no longer exists, or the con
 
 ## Development
 
+Sources live in `src/`; `tsc` compiles them to `lib/`, which is a build artifact and is not committed.
+
 ```bash
 npm install
+npm run build
 npm test
-node test/harness.mjs
+npm run test:git-bash
 ```
 
-`npm test` runs the unit tests; `node test/harness.mjs` drives the plugin with a real cordis and dsh-bash-local, with no DSH boot needed.
+`npm test` builds and runs unit tests plus a real tool-service integration test. The integration test asserts permission enforcement through the real `ToolsService` and execution pipeline, without Git Bash or a running DSH instance. It explicitly skips non-Windows platforms because the plugin only registers its guard on Windows.
+
+`npm run test:git-bash` separately builds and runs `test/harness.mjs`, requiring Windows and an available Git Bash installation. It executes commands through real cordis and dsh-bash-local and prints inspection results. It is excluded from the default test suite and does not require starting DSH.
 
 ---
 

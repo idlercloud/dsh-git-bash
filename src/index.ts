@@ -19,7 +19,10 @@
  *
  * @module dsh-git-bash
  */
-import { LocalBashExecutor } from '@deepseek-ai/dsh-bash-local';
+
+import type { Context } from '@deepseek-ai/cordis';
+import { type Config as BashConfig, LocalBashExecutor } from '@deepseek-ai/dsh-bash-local';
+import type { ShellExecRequest, ShellExecSpec, ShellExecution } from '@deepseek-ai/dsh-shell';
 import { FULL_ACCESS_MODE, installBashGuard } from './guard.js';
 import { installGitBashPrompt } from './prompt.js';
 import { BashResolver } from './resolve.js';
@@ -27,10 +30,13 @@ import { normalizeWorkdir } from './workdir.js';
 
 /** 加载器读取的插件元数据。 */
 export const name = '@idlercloud/dsh-git-bash';
-export const inject = ['subprocess'];
+export const inject = ['subprocess', 'tools'];
 export const Config = LocalBashExecutor.Config;
 // 暴露给测试：harness 用它按真实环境解析与列出候选。
 export { BashResolver };
+
+/** 插件行的配置：执行器配置之外，本插件多一个 bashPath。 */
+export type PluginConfig = BashConfig & { bashPath?: string };
 
 /**
  * 本地 bash 执行器。
@@ -40,18 +46,18 @@ export { BashResolver };
  * 解析放在第一次 execute 里，挂载时不探测注册表、where 和 uname。
  */
 class GitBashExecutor extends LocalBashExecutor {
+  gitBashResolver: BashResolver;
+  gitBashPathLogged = false;
+
   /**
    * @param ctx - 执行器 context。
    * @param config - 插件配置对象。
    * @param resolver - 本次挂载专用的 Git Bash 发现器。
-   * @param logger - 宿主日志；第一次解析成功时打一条路径日志。
    */
-  constructor(ctx, config, resolver, logger) {
+  constructor(ctx: Context, config: BashConfig, resolver: BashResolver) {
     super(ctx, config);
     // 宿主把服务包成 Proxy，私有字段读不到；普通属性可以穿透。
     this.gitBashResolver = resolver;
-    this.gitBashLogger = logger;
-    this.gitBashPathLogged = false;
   }
 
   /**
@@ -59,7 +65,7 @@ class GitBashExecutor extends LocalBashExecutor {
    * @param request - 工具层传入的执行请求。
    * @returns 执行规格，`workdir` 已换成 Windows 路径。
    */
-  resolve(request) {
+  resolve(request: ShellExecRequest): ShellExecSpec {
     const spec = super.resolve(request);
     return { ...spec, workdir: normalizeWorkdir(spec.workdir) };
   }
@@ -73,11 +79,11 @@ class GitBashExecutor extends LocalBashExecutor {
    * @param spec - resolve() 产出的执行规格。
    * @returns ShellExecution 句柄。
    */
-  async execute(spec) {
+  async execute(spec: ShellExecSpec): Promise<ShellExecution> {
     const bashPath = this.gitBashResolver.resolve();
     if (!this.gitBashPathLogged) {
       this.gitBashPathLogged = true;
-      this.gitBashLogger?.info?.('dsh-git-bash: bash.exe -> %s', bashPath);
+      this.ctx.logger.info('dsh-git-bash: bash.exe -> %s', bashPath);
     }
     return this.executeArgv(spec, [bashPath, '-c', spec.command]);
   }
@@ -89,17 +95,16 @@ class GitBashExecutor extends LocalBashExecutor {
  * @param ctx - 挂载点 context（位于 isolate 隔离作用域内）。
  * @param config - 组合条目配置，可含 bashPath / cwd / timeoutMs 等。
  */
-export function apply(ctx, config) {
-  const logger = ctx.logger;
+export function apply(ctx: Context, config: PluginConfig): void {
   const resolver = new BashResolver();
-  resolver.configure(config?.bashPath);
+  resolver.configure(config.bashPath);
   installGitBashPrompt(ctx);
   if (installBashGuard(ctx) !== undefined) {
-    logger?.info?.(
+    ctx.logger.info(
       'dsh-git-bash: `bash` is denied before spawn unless the session file policy is `%s`.',
       FULL_ACCESS_MODE,
     );
   }
   // 构造即注册：构造函数把执行器挂到隔离作用域的 ctx.shell 上，实例由 context 持有。
-  new GitBashExecutor(ctx, config, resolver, logger);
+  new GitBashExecutor(ctx, config, resolver);
 }

@@ -5,7 +5,10 @@
   "type": "module",
   "main": "lib/index.js",
   "exports": {
-    ".": "./lib/index.js",
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
     "./package.json": "./package.json"
   },
   "dsh": {
@@ -30,12 +33,18 @@
     "dsh": ">=0.2.2-rc.1 <0.2.3-0"
   },
   "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "pretest": "npm run build",
     "test": "node --test \"test/*.test.mjs\"",
+    "pretest:git-bash": "npm run build",
+    "test:git-bash": "node test/harness.mjs",
     "lint": "biome lint .",
     "format": "biome format --write .",
     "format:check": "biome format .",
     "check": "biome check .",
-    "check:fix": "biome check --write ."
+    "check:fix": "biome check --write .",
+    "prepack": "npm run build"
   },
   "license": "MIT",
   "repository": {
@@ -61,6 +70,14 @@
   "devDependencies": {
     "@biomejs/biome": "2.6.6",
     "@deepseek-ai/cordis": "4.1.0",
-    "@deepseek-ai/dsh-bash-local": "0.2.2-rc.1"
-  }
+    "@deepseek-ai/dsh-bash-local": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-sandbox": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-sandbox-policy": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-shell": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-system-prompt": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-tools": "0.2.2-rc.1",
+    "@types/node": "^22.20.5",
+    "typescript": "^5.9.3"
+  },
+  "types": "lib/index.d.ts"
 }

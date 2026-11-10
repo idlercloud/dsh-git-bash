@@ -2,3 +2,6 @@ node_modules/
 *.tgz
 cordis.patch.yml.bak-group
 .DS_Store
+
+# tsc output
+lib/

@@ -81,9 +81,28 @@ root.provide('settings', {
 });
 root.provide('shell', 'PWSH-EXECUTOR-PLACEHOLDER');
 
-// 工具服务的最小实现：guard 用它核对调用归属，两次查询返回同一个定义即视为本插件挂的 bash。
+// 工具服务的最小实现：`get` 用于核对调用归属，`guard` 收集插件注册的守卫，
+// `checkGuards` 复刻宿主在 pre-execute 之后逐个求值守卫的行为。
 const bashDefinition = { name: 'bash' };
-root.provide('tools', { get: () => bashDefinition });
+const guards = [];
+const toolsService = {
+  get: () => bashDefinition,
+  guard(fn) {
+    guards.push(fn);
+    return () => {
+      const index = guards.indexOf(fn);
+      if (index >= 0) guards.splice(index, 1);
+    };
+  },
+  checkGuards(exec) {
+    for (const fn of guards) {
+      const reason = fn(exec);
+      if (reason !== undefined) return reason;
+    }
+    return undefined;
+  },
+};
+root.provide('tools', toolsService);
 
 // 权限闸门要读的 sandboxPolicy 最小实现：模式可切换，默认完全权限，C 段的真实命令才不会被挡下。
 const sandbox = { mode: 'danger-full-access' };
@@ -151,25 +170,33 @@ try {
 if (savedBash === undefined) delete process.env.DSH_GIT_BASH;
 else process.env.DSH_GIT_BASH = savedBash;
 
-// ---- I) 权限闸门：非完全权限在 pre-execute 阶段被拒绝 ----
-// 这里派发的是宿主真实的 tools/pre-execute waterfall，监听器是插件在 apply 里注册的。
-const preExecute = (exec) => root.waterfall('tools/pre-execute', exec, () => Promise.resolve({ kind: 'allow' }));
+// ---- I) 权限闸门：工具层 guard 在 pre-execute 之后强制拒绝 ----
+// 宿主流水线在 pre-execute 得到 allow 后调用 checkGuards；guard 只能拒绝，
+// 其他监听器返回什么都无法把它改回放行。
+const checkGuards = (exec) => toolsService.checkGuards(exec);
 const bashCall = (agent) => (agent === undefined ? { name: 'bash' } : { name: 'bash', agent });
 const guardAgent = { session: { id: 'harness-session' } };
+const verdict = (exec) => (checkGuards(exec) === undefined ? 'allow' : 'deny');
 
 sandbox.mode = 'danger-full-access';
-record('I1 完全权限放行', (await preExecute(bashCall(guardAgent))).kind);
+record('I1 完全权限放行', verdict(bashCall(guardAgent)));
 
 sandbox.mode = 'workspace-write';
-const deniedWrite = await preExecute(bashCall(guardAgent));
-record('I2 workspace-write 拒绝', `${deniedWrite.kind} / ${deniedWrite.info?.code}`);
-record('I3 非 bash 调用不受影响', (await preExecute({ name: 'pwsh', agent: guardAgent })).kind);
+record('I2 workspace-write 拒绝', `deny / ${String(checkGuards(bashCall(guardAgent))).slice(0, 48)}`);
+record('I3 非 bash 调用不受影响', verdict({ name: 'pwsh', agent: guardAgent }));
 
 sandbox.mode = 'danger-full-access';
-record('I4 无会话按实例默认模式放行', (await preExecute(bashCall(undefined))).kind);
+record('I4 无会话按实例默认模式放行', verdict(bashCall(undefined)));
 
 sandbox.mode = 'workspace-write';
-record('I5 无会话且实例默认模式受限时拒绝', (await preExecute(bashCall(undefined))).kind);
+record('I5 无会话且实例默认模式受限时拒绝', verdict(bashCall(undefined)));
+
+// I6：pre-execute 监听器把调用放行后，guard 仍然拒绝。
+sandbox.mode = 'read-only';
+const listenerVerdict = (
+  await root.waterfall('tools/pre-execute', bashCall(guardAgent), () => Promise.resolve({ kind: 'allow' }))
+).kind;
+record('I6 监听器放行后仍被 guard 拒绝', `${listenerVerdict} -> ${verdict(bashCall(guardAgent))}`);
 
 // ---- H) config 的 bashPath 覆盖（每次挂载独立解析器，放在最后） ----
 const realm3 = root.isolate('shell');

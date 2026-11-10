@@ -15,6 +15,8 @@
  *
  * @module dsh-git-bash/prompt
  */
+import type { Context, Disposable } from '@deepseek-ai/cordis';
+import type { SystemPrompt } from '@deepseek-ai/dsh-system-prompt';
 
 /** 注册用的 section 名：与官方 `tool:bash` 不同名，二者共存。 */
 export const SECTION_NAME = 'tool:bash:git-bash';
@@ -34,37 +36,31 @@ export const GIT_BASH_PROMPT =
   'Prefer `bash` for command-line work. Use `pwsh` only when the task is Windows-native, such as cmdlets, ' +
   'the registry, services, and WMI, or when `bash` is unavailable.';
 
-/**
- * `SECTION_ORDERS.TOOL_BASH` 一直是 1000。宿主哪天改了分区表的键名或删了这张表，
- * 用它兜底：位置可能和其他工具段落挨得不理想，但这段说明不会消失。
- */
-const FALLBACK_ORDER = 1000;
+/** 可注入的选项，测试用来替换 platform 与服务。 */
+export interface GitBashPromptOptions {
+  platform?: NodeJS.Platform;
+  prompt?: SystemPrompt;
+}
 
 /**
  * 注册系统提示词 section。
  *
  * @param ctx - 插件 context，宿主需已提供 systemPrompt。
- * @param options - 测试用：platform、prompt、logger 可注入。
+ * @param options - 测试用：platform、prompt 可注入。
  * @returns effect disposer；不注册时 undefined。
  */
-export function installGitBashPrompt(ctx, options = {}) {
+export function installGitBashPrompt(
+  ctx: Context,
+  options: GitBashPromptOptions = {},
+): Disposable<Promise<void>> | undefined {
   const platform = options.platform ?? process.platform;
   if (platform !== 'win32') return undefined;
 
   const prompt = options.prompt ?? ctx.get('systemPrompt');
   if (!prompt) return undefined;
 
-  const hostOrder = prompt.getSectionOrder('TOOL_BASH');
-  const order = Number.isFinite(hostOrder) ? hostOrder : FALLBACK_ORDER;
-  if (!Number.isFinite(hostOrder)) {
-    (options.logger ?? ctx.logger)?.warn?.(
-      'dsh-git-bash: systemPrompt.getSectionOrder("TOOL_BASH") is not a finite number — the host probably ' +
-        `renamed its section order table; placing the Git Bash prompt at the historical order ${FALLBACK_ORDER}.`,
-    );
-  }
-
   return ctx.effect(
-    () => prompt.section({ name: SECTION_NAME, order, text: GIT_BASH_PROMPT }),
+    () => prompt.section({ name: SECTION_NAME, order: prompt.getSectionOrder('TOOL_BASH'), text: GIT_BASH_PROMPT }),
     'dsh-git-bash: system prompt',
   );
 }

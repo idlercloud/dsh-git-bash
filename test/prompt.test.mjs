@@ -30,11 +30,10 @@ function fakePrompt({ orders = { TOOL_BASH: 1000 } } = {}) {
 }
 
 /** 插件 context 的最小实现：effect 立刻执行并按标签记账。 */
-function fakeCtx({ prompt, logger } = {}) {
+function fakeCtx({ prompt } = {}) {
   const effects = [];
   return {
     effects,
-    logger,
     get(name) {
       return name === 'systemPrompt' ? prompt : undefined;
     },
@@ -84,19 +83,5 @@ describe('installGitBashPrompt', () => {
 
     assert.equal(installGitBashPrompt(ctx, { platform: 'win32' }), undefined);
     assert.deepEqual(ctx.effects, []);
-  });
-
-  it('分区表里没有 TOOL_BASH 时用兜底 order 照常注册，并记一条警告', () => {
-    const prompt = fakePrompt({ orders: {} });
-    const warnings = [];
-    const ctx = fakeCtx({ prompt, logger: { warn: (message) => warnings.push(message) } });
-
-    installGitBashPrompt(ctx, { platform: 'win32' });
-
-    // 兜底值是 SECTION_ORDERS.TOOL_BASH 的历史值，位置可能不准，但提示词不能丢；
-    // 位置是猜的这件事必须留在日志里，否则分区表改名后没人能发现。
-    assert.equal(prompt.sections.length, 1);
-    assert.equal(prompt.sections[0].order, 1000);
-    assert.equal(warnings.length, 1);
   });
 });
