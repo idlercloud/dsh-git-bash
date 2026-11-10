@@ -8,6 +8,7 @@ import { describe, it } from 'node:test';
 import { BashResolver } from '../lib/resolve.js';
 
 const ENV = {
+  SystemRoot: 'C:\\Windows',
   ProgramFiles: 'C:\\Program Files',
   LOCALAPPDATA: 'C:\\Users\\me\\AppData\\Local',
   USERPROFILE: 'C:\\Users\\me',
@@ -112,10 +113,11 @@ describe('BashResolver', () => {
 
   it('裸名字跳过 PATH 上的 WSL 启动器', () => {
     const wsl = 'C:\\Windows\\System32\\bash.exe';
+    const alias = 'C:\\Users\\me\\AppData\\Local\\Microsoft\\WindowsApps\\bash.exe';
     const expected = 'C:\\Tools\\bash.exe';
     const runner = new MockRunner({
-      files: [wsl, expected],
-      whereHits: { bash: [wsl, expected] },
+      files: [wsl, alias, expected],
+      whereHits: { bash: [wsl, alias, expected] },
       unameOutputs: { [normalize(expected)]: 'MINGW64_NT-10.0-26300' },
     });
     const resolver = resolverFor(runner);
@@ -139,6 +141,17 @@ describe('BashResolver', () => {
     const wslBash = 'C:\\Windows\\System32\\bash.exe';
     const resolver = resolverFor(new MockRunner({ files: [wslBash] }));
     resolver.configure(wslBash);
+
+    assert.throws(
+      () => resolver.resolve(),
+      (error) => error.code === 'GIT_BASH_NOT_FOUND' && error.message.includes('WSL'),
+    );
+  });
+
+  it('显式配置指向 WindowsApps 的商店别名时拒绝', () => {
+    const alias = 'C:\\Users\\me\\AppData\\Local\\Microsoft\\WindowsApps\\bash.exe';
+    const resolver = resolverFor(new MockRunner({ files: [alias] }));
+    resolver.configure(alias);
 
     assert.throws(
       () => resolver.resolve(),
@@ -268,6 +281,61 @@ describe('BashResolver', () => {
     assert.equal(resolverFor(runner).resolve(), gitBash);
     assert.equal(
       runner.recordedCalls.some(([file]) => normalize(file) === normalize(wslBash)),
+      false,
+    );
+  });
+
+  it('跳过 WindowsApps 下的商店别名，不做身份探测', () => {
+    const alias = 'C:\\Users\\me\\AppData\\Local\\Microsoft\\WindowsApps\\bash.exe';
+    const gitBash = 'C:\\Tools\\bash.exe';
+    const runner = new MockRunner({
+      files: [alias, gitBash],
+      whereHits: { bash: [alias, gitBash] },
+      unameOutputs: { [normalize(gitBash)]: 'MINGW64_NT-10.0-26300' },
+    });
+
+    assert.equal(resolverFor(runner).resolve(), gitBash);
+    assert.equal(
+      runner.recordedCalls.some(([file]) => normalize(file) === normalize(alias)),
+      false,
+    );
+  });
+
+  it('路径里带 System32 但不是系统目录时照常探测', () => {
+    const gitBash = 'C:\\Tools\\System32\\bash.exe';
+    const runner = new MockRunner({
+      files: [gitBash],
+      whereHits: { bash: [gitBash] },
+      unameOutputs: { [normalize(gitBash)]: 'MINGW64_NT-10.0-26300' },
+    });
+
+    assert.equal(resolverFor(runner).resolve(), gitBash);
+  });
+
+  it('路径里带 WindowsApps 但不是商店别名时照常探测', () => {
+    const gitBash = 'C:\\Tools\\WindowsApps\\bash.exe';
+    const runner = new MockRunner({
+      files: [gitBash],
+      whereHits: { bash: [gitBash] },
+      unameOutputs: { [normalize(gitBash)]: 'MINGW64_NT-10.0-26300' },
+    });
+
+    assert.equal(resolverFor(runner).resolve(), gitBash);
+  });
+
+  it('SystemRoot 不在 C: 时按完整路径跳过启动器', () => {
+    const launcher = 'D:\\Windows\\System32\\bash.exe';
+    const gitBash = 'D:\\Tools\\bash.exe';
+    const runner = new MockRunner({
+      files: [launcher, gitBash],
+      whereHits: { bash: [launcher, gitBash] },
+      unameOutputs: { [normalize(gitBash)]: 'MINGW64_NT-10.0-26300' },
+    });
+    const resolver = resolverFor(runner, { ...ENV, SystemRoot: 'D:\\Windows' });
+
+    assert.equal(resolver.resolve(), gitBash);
+    assert.equal(
+      runner.recordedCalls.some(([file]) => normalize(file) === normalize(launcher)),
       false,
     );
   });

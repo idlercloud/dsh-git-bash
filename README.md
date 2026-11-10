@@ -76,7 +76,7 @@ Git Bash 是 MSYS2 进程，在 Windows 受限令牌下需要 fork、管道与�
 5. `where git` 的每个命中反推安装根
 6. `where bash` 的直接命中
 
-每个候选项都会检查其路径是否存在，并跑一次 `uname -s`，只接受 `MINGW` / `MSYS`。`C:\Windows\System32\bash.exe` 是遗留的 WSL 启动器，直接跳过。无合适候选项时报错，错误中列出尝试过的每条路径。
+每个候选项都会检查其路径是否存在，并跑一次 `uname -s`，只接受 `MINGW` / `MSYS`。`%SystemRoot%\System32\bash.exe` 是遗留的 WSL 启动器，`%LOCALAPPDATA%\Microsoft\WindowsApps\bash.exe` 是 WSL 的商店应用执行别名，两者都直接跳过。无合适候选项时报错，错误中列出尝试过的每条路径。
 
 解析结果会缓存。缓存的文件不存在了，或者配置变了，就清除缓存并重新解析。
 

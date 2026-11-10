@@ -76,7 +76,7 @@ Git Bash is an MSYS2 process. Under the Windows restricted token it needs fork, 
 5. the install root inferred from each `where git` hit
 6. direct `where bash` hits
 
-Every candidate is checked for existence and then run once with `uname -s`; only `MINGW` / `MSYS` is accepted. `C:\Windows\System32\bash.exe` is the legacy WSL launcher and is skipped outright. If no candidate fits, the plugin reports an error listing every path it tried.
+Every candidate is checked for existence and then run once with `uname -s`; only `MINGW` / `MSYS` is accepted. `%SystemRoot%\System32\bash.exe` is the legacy WSL launcher and `%LOCALAPPDATA%\Microsoft\WindowsApps\bash.exe` is the Store app execution alias for WSL; both are skipped outright. If no candidate fits, the plugin reports an error listing every path it tried.
 
 The resolved result is cached. When the cached file no longer exists, or the configuration changes, the cache is cleared and resolution runs again.
 
