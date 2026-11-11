@@ -4,9 +4,8 @@
  * 顺序：
  *   1. config 里的 bashPath / 环境变量 DSH_GIT_BASH
  *   2. GIT_INSTALL_ROOT
- *   3. 注册表 InstallPath（HKCU、HKLM、WOW6432Node）
- *   4. 常见安装位置
- *   5. PATH 中 git.exe 反推安装根
+ *   3. 常见安装位置
+ *   4. PATH 中 git.exe 反推安装根
  *
  * 每个候选先判断是否存在；`%SystemRoot%\System32\bash.exe` 与
  * `%LOCALAPPDATA%\Microsoft\WindowsApps\bash.exe` 是 WSL 启动器，直接跳过。
@@ -16,17 +15,15 @@
  *
  * @module dsh-git-bash/resolve
  */
-import { execFileSync } from 'node:child_process';
 import { lstatSync, statSync } from 'node:fs';
 import { dirname, join, win32 } from 'node:path';
 
-/** 构造选项；env、stat、lstat、run 可在单测里换成假实现。 */
+/** 构造选项；env、stat、lstat 可在单测里换成假实现。 */
 export interface BashResolverOptions {
   bashPath?: string;
   env?: NodeJS.ProcessEnv;
   stat?: typeof statSync;
   lstat?: typeof lstatSync;
-  run?: typeof execFileSync;
 }
 
 /** 比较路径用的归一化：统一分隔符，忽略大小写。 */
@@ -48,25 +45,17 @@ export class BashResolver {
   private readonly env: NodeJS.ProcessEnv;
   private readonly stat: typeof statSync;
   private readonly lstat: typeof lstatSync;
-  private readonly run: typeof execFileSync;
   private readonly configuredPath: string | undefined;
   private cached: string | undefined;
 
   /** 配置与环境在创建时固定；配置变化时由新的解析器接管。 */
-  constructor({
-    bashPath,
-    env = process.env,
-    stat = statSync,
-    lstat = lstatSync,
-    run = execFileSync,
-  }: BashResolverOptions = {}) {
+  constructor({ bashPath, env = process.env, stat = statSync, lstat = lstatSync }: BashResolverOptions = {}) {
     this.env = env;
     const explicit = bashPath || this.env.DSH_GIT_BASH;
     // 在创建时固定路径基准，避免执行命令的 workdir 或后续 cwd 变化影响程序位置。
     this.configuredPath = explicit && hasSeparator(explicit) ? win32.resolve(explicit) : explicit;
     this.stat = stat;
     this.lstat = lstat;
-    this.run = run;
   }
 
   /**
@@ -88,19 +77,7 @@ export class BashResolver {
     // 2. GIT_INSTALL_ROOT（Scoop 的 git 包会设）
     if (env.GIT_INSTALL_ROOT) addRoot(env.GIT_INSTALL_ROOT);
 
-    // 3. 注册表 InstallPath（HKCU → HKLM → WOW6432Node）。32 位安装器会写 WOW6432Node。
-    const registryKeys = [
-      'HKCU\\SOFTWARE\\GitForWindows',
-      'HKLM\\SOFTWARE\\GitForWindows',
-      'HKLM\\SOFTWARE\\WOW6432Node\\GitForWindows',
-    ];
-    for (const key of registryKeys) {
-      const output = this.runText('reg.exe', ['query', key, '/v', 'InstallPath']);
-      const install = /InstallPath\s+REG_SZ\s+(.+?)\s*$/m.exec(output)?.[1]?.trim();
-      if (install) addRoot(install);
-    }
-
-    // 4. 常见安装位置
+    // 3. 常见安装位置
     add(join(env.ProgramFiles ?? 'C:\\Program Files', 'Git\\bin\\bash.exe'));
     for (const key of ['ProgramFiles(x86)', 'ProgramW6432']) {
       const value = env[key];
@@ -110,7 +87,7 @@ export class BashResolver {
     if (env.USERPROFILE) add(join(env.USERPROFILE, 'scoop\\apps\\git\\current\\bin\\bash.exe'));
     if (env.ProgramData) add(join(env.ProgramData, 'chocolatey\\lib\\git\\tools\\bin\\bash.exe'));
 
-    // 5. PATH 中 git.exe 的命中反推安装根
+    // 4. PATH 中 git.exe 的命中反推安装根
     for (const git of this.findExecutables('git')) {
       const dir = dirname(git);
       add(join(dir, '..\\bin\\bash.exe'));
@@ -211,15 +188,6 @@ export class BashResolver {
       return entry.isFile() || entry.isSymbolicLink();
     } catch {
       return false;
-    }
-  }
-
-  /** 跑一条只读命令，失败时返回空串。仅用于注册表查询。 */
-  private runText(file: string, args: string[]): string {
-    try {
-      return this.run(file, args, { encoding: 'utf8', windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'] });
-    } catch {
-      return '';
     }
   }
 

@@ -73,9 +73,8 @@ Git Bash is an MSYS2 process. Under the Windows restricted token it needs fork, 
 
 1. `bashPath` in `config`, or the `DSH_GIT_BASH` environment variable
 2. `GIT_INSTALL_ROOT` (set by Scoop's git package)
-3. `InstallPath` under `SOFTWARE\GitForWindows`, checking `HKCU`, `HKLM`, then `HKLM\SOFTWARE\WOW6432Node`
-4. well-known locations: `%ProgramFiles%\Git\bin`, `%ProgramFiles(x86)%`, `%ProgramW6432%`, `%LOCALAPPDATA%\Programs\Git\bin`, `%USERPROFILE%\scoop`, Chocolatey
-5. the install root inferred from each `git.exe` found on PATH
+3. well-known locations: `%ProgramFiles%\Git\bin`, `%ProgramFiles(x86)%`, `%ProgramW6432%`, `%LOCALAPPDATA%\Programs\Git\bin`, `%USERPROFILE%\scoop`, Chocolatey
+4. the install root inferred from each `git.exe` found on PATH
 
 Each candidate is checked for existence; the first existing candidate that is not a WSL launcher is used. `%SystemRoot%\System32\bash.exe` is the legacy WSL launcher and `%LOCALAPPDATA%\Microsoft\WindowsApps\bash.exe` is the Store app execution alias for WSL; both are skipped outright. If no candidate fits, the plugin reports an error listing every path it tried.
 

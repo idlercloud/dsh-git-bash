@@ -1,5 +1,5 @@
 /**
- * lib/resolve.js 的单测：用假的文件系统与子进程覆盖发现链与选择规则。
+ * lib/resolve.js 的单测：用假的文件系统覆盖发现链与选择规则。
  */
 
 import assert from 'node:assert/strict';
@@ -19,36 +19,25 @@ const ENV = {
 const normalize = (path) => String(path).replaceAll('/', '\\').toLowerCase();
 
 /**
- * 解析器的假依赖：files 决定 stat 的结果，registryInstallPaths
- * 决定 reg.exe 的输出；pathFiles 提供 PATH 中的文件；recordedCalls 记录所有跑过的命令。
+ * 解析器的假依赖：files 决定 stat 的结果；pathFiles 提供 PATH 中的文件。
  */
 class MockRunner {
-  recordedCalls = [];
+  statCalls = [];
 
-  constructor({ files = [], registryInstallPaths = {}, pathFiles = [] } = {}) {
+  constructor({ files = [], pathFiles = [] } = {}) {
     this.files = new Set([...files, ...pathFiles].map(normalize));
-    this.registryInstallPaths = registryInstallPaths;
     this.path = pathFiles.map((file) => win32.dirname(file)).join(';');
   }
 
   stat = (path) => {
+    this.statCalls.push(normalize(path));
     if (!this.files.has(normalize(path))) throw new Error('ENOENT');
     return { isFile: () => true, isSymbolicLink: () => false };
-  };
-
-  run = (file, args) => {
-    this.recordedCalls.push([file, ...args]);
-    if (file === 'reg.exe') {
-      const install = this.registryInstallPaths[args[1]];
-      if (!install) throw new Error('registry key not found');
-      return `    InstallPath    REG_SZ    ${install}\n`;
-    }
-    throw new Error(`unexpected probe: ${file}`);
   };
 }
 
 function resolverFor(runner, env = ENV, bashPath) {
-  return new BashResolver({ bashPath, env: { PATH: runner.path, ...env }, stat: runner.stat, run: runner.run });
+  return new BashResolver({ bashPath, env: { PATH: runner.path, ...env }, stat: runner.stat });
 }
 
 describe('BashResolver', () => {
@@ -108,7 +97,6 @@ describe('BashResolver', () => {
     const runner = new MockRunner({ files: [first, second] });
     const resolver = resolverFor(runner, { ...ENV, PATH: ' ; "C:\\中文 工具" ;;D:\\Git; ' }, 'bash');
     assert.equal(resolver.resolve(), first);
-    assert.deepEqual(runner.recordedCalls, []);
   });
 
   it('支持 Path 环境变量拼写和带 exe 后缀的裸名字', () => {
@@ -118,26 +106,22 @@ describe('BashResolver', () => {
       bashPath: 'bash.exe',
       env: { ...ENV, Path: 'C:\\Git' },
       stat: runner.stat,
-      run: runner.run,
     });
     assert.equal(resolver.resolve(), expected);
-    assert.deepEqual(runner.recordedCalls, []);
   });
 
   it('不按 PATHEXT 选择批处理文件，也不隐式搜索当前目录', () => {
     const runner = new MockRunner({ files: ['C:\\Git\\bash.cmd', win32.resolve('bash.exe')] });
     const resolver = resolverFor(runner, { ...ENV, PATH: 'C:\\Git;;', PATHEXT: '.CMD;.EXE' }, 'bash');
     assert.throws(() => resolver.resolve(), { code: 'GIT_BASH_NOT_FOUND' });
-    assert.deepEqual(runner.recordedCalls, []);
   });
 
-  it('显式配置存在时直接采用，不启动子进程', () => {
+  it('显式配置存在时直接采用', () => {
     const expected = 'C:\\Git\\bin\\bash.exe';
     const runner = new MockRunner({ files: [expected] });
     const resolver = resolverFor(runner, { ...ENV, DSH_GIT_BASH: 'C:\\other\\bash.exe' }, expected);
 
     assert.equal(resolver.resolve(), expected);
-    assert.deepEqual(runner.recordedCalls, []);
   });
 
   it('config 里没有 bashPath 时回退到 DSH_GIT_BASH', () => {
@@ -167,7 +151,6 @@ describe('BashResolver', () => {
 
     assert.equal(resolver.resolve(), expected);
     assert.equal(resolver.resolve(), expected);
-    assert.deepEqual(runner.recordedCalls, []);
   });
 
   it('裸名字跳过 PATH 上的 WSL 启动器', () => {
@@ -242,24 +225,6 @@ describe('BashResolver', () => {
     const resolver = resolverFor(runner, { ...ENV, GIT_INSTALL_ROOT: root });
 
     assert.equal(resolver.resolve(), gitBash);
-  });
-
-  it('注册表按 HKCU、HKLM、WOW6432Node 的顺序查找', () => {
-    const root = 'C:\\Program Files (x86)\\Git';
-    const gitBash = `${root}\\bin\\bash.exe`;
-    const runner = new MockRunner({
-      files: [gitBash],
-      registryInstallPaths: { 'HKLM\\SOFTWARE\\WOW6432Node\\GitForWindows': root },
-    });
-    const resolver = resolverFor(runner);
-
-    assert.equal(resolver.resolve(), gitBash);
-    const registryQueries = runner.recordedCalls.filter(([file]) => file === 'reg.exe').map(([, , key]) => key);
-    assert.deepEqual(registryQueries, [
-      'HKCU\\SOFTWARE\\GitForWindows',
-      'HKLM\\SOFTWARE\\GitForWindows',
-      'HKLM\\SOFTWARE\\WOW6432Node\\GitForWindows',
-    ]);
   });
 
   it('PATH 中 git.exe 的命中反推安装根', () => {
@@ -349,16 +314,16 @@ describe('BashResolver', () => {
     );
   });
 
-  it('解析结果被缓存，后续调用不再探测', () => {
+  it('解析结果被缓存，后续调用只复核缓存文件', () => {
     const root = 'C:\\Scoop\\apps\\git\\current';
     const gitBash = `${root}\\bin\\bash.exe`;
     const runner = new MockRunner({ files: [gitBash] });
     const resolver = resolverFor(runner, { ...ENV, GIT_INSTALL_ROOT: root });
 
     assert.equal(resolver.resolve(), gitBash);
-    const countAfterFirst = runner.recordedCalls.length;
+    const checked = runner.statCalls.length;
     assert.equal(resolver.resolve(), gitBash);
-    assert.equal(runner.recordedCalls.length, countAfterFirst);
+    assert.deepEqual(runner.statCalls.slice(checked), [normalize(gitBash)]);
   });
 
   it('缓存的文件消失后重新解析', () => {

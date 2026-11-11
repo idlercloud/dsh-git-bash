@@ -13,7 +13,6 @@
  * - config 里的 bashPath
  * - 环境变量 DSH_GIT_BASH
  * - GIT_INSTALL_ROOT
- * - 注册表 InstallPath
  * - 常见安装位置
  * - PATH 中的 git.exe 反推。
  *
