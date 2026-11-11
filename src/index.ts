@@ -23,6 +23,7 @@
 import type { Context } from '@deepseek-ai/cordis';
 import { type Config as BashConfig, LocalBashExecutor } from '@deepseek-ai/dsh-bash-local';
 import type { ShellExecRequest, ShellExecSpec, ShellExecution } from '@deepseek-ai/dsh-shell';
+import z from '@deepseek-ai/schemastery';
 import { bashDenialReason, FULL_ACCESS_MODE, installBashGuard } from './guard.js';
 import { installGitBashPrompt } from './prompt.js';
 import { BashResolver } from './resolve.js';
@@ -31,7 +32,10 @@ import { normalizeWorkdir } from './workdir.js';
 /** 加载器读取的插件元数据。 */
 export const name = '@idlercloud/dsh-git-bash';
 export const inject = ['subprocess', 'tools'];
-export const Config = LocalBashExecutor.Config;
+export const Config = z.object({
+  ...LocalBashExecutor.Config.dict,
+  bashPath: z.string().description('Git Bash 路径，可使用绝对路径、相对路径或 PATH 中的可执行文件名。'),
+});
 // 暴露给测试：harness 用它按真实环境解析与列出候选。
 export { BashResolver };
 
