@@ -50,11 +50,39 @@ Git Bash is an MSYS2 process. Under the Windows restricted token it needs fork, 
 
 ## Install, upgrade, and uninstall
 
-**Not available yet.** This fork has not been publicly released and has not been published to npm; install, upgrade and uninstall commands will be added here after release.
+**Requirements**
+
+- Windows 10/11.
+- Git for Windows installed (provides `bash.exe`).
+- DSH `0.2.2-rc.1`.
+
+Desktop is a special case: normally install through the built-in plugin manager by entering the package name `@idlercloud/dsh-git-bash`. To install a specific version, enter `@idlercloud/dsh-git-bash@0.2.0`.
+
+Otherwise, install into the target profile:
+
+```bash
+dsh plugin --profile <profile> add @idlercloud/dsh-git-bash
+```
+
+`<profile>` is the profile name, such as `web`.
+
+Upgrade to the latest version:
+
+```bash
+dsh plugin --profile <profile> add @idlercloud/dsh-git-bash@latest
+```
+
+Uninstall:
+
+```bash
+dsh plugin --profile <profile> remove @idlercloud/dsh-git-bash
+```
 
 ---
 
 ## Configuration
+
+The bundle patch already inserts the `git-bash-executor` and `git-bash-tool` rows; write the `config` below only when overriding defaults.
 
 ```yaml
 - id: git-bash-executor
@@ -96,6 +124,8 @@ npm run test:git-bash
 `npm test` builds and runs unit tests plus a real tool-service integration test. The integration test asserts permission enforcement through the real `ToolsService` and execution pipeline, without Git Bash or a running DSH instance. It explicitly skips non-Windows platforms because the plugin only registers its guard on Windows.
 
 `npm run test:git-bash` separately builds and runs `test/harness.mjs`, requiring Windows and an available Git Bash installation. It executes commands through real cordis and dsh-bash-local and asserts the results, returning a nonzero exit code on failure. It is excluded from the default test suite and does not require starting DSH.
+
+See [CHANGELOG.md](https://github.com/idlercloud/dsh-git-bash/blob/main/CHANGELOG.md) for changes.
 
 ---
 

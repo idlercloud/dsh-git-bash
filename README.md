@@ -50,11 +50,39 @@ Git Bash 是 MSYS2 进程，在 Windows 受限令牌下需要 fork、管道与�
 
 ## 安装、升级与卸载
 
-**暂不可用。** 本 fork 尚未公开发布，也没有发布到 npm；发布后在这里补安装、升级和卸载命令。
+**要求**
+
+- Windows 10/11。
+- 已安装 Git for Windows（含 `bash.exe`）。
+- DSH `0.2.2-rc.1`。
+
+桌面端是特殊的，一般通过内置的插件管理器安装，输入包名 `@idlercloud/dsh-git-bash` 即可安装，如需安装特定版本，可以输入 `@idlercloud/dsh-git-bash@0.2.0`。
+
+其他情况下，把插件安装到目标 profile：
+
+```bash
+dsh plugin --profile <profile> add @idlercloud/dsh-git-bash
+```
+
+`<profile>` 是 profile 名称，例如 `web`。
+
+升级到最新版本：
+
+```bash
+dsh plugin --profile <profile> add @idlercloud/dsh-git-bash@latest
+```
+
+卸载：
+
+```bash
+dsh plugin --profile <profile> remove @idlercloud/dsh-git-bash
+```
 
 ---
 
 ## 配置
+
+插件自带的 bundle patch 已插入 `git-bash-executor` 和 `git-bash-tool` 两行；只有需要覆盖默认配置时才写下面的 `config`。
 
 ```yaml
 - id: git-bash-executor
@@ -96,6 +124,8 @@ npm run test:git-bash
 `npm test` 会先构建，再运行单元测试和真实工具服务集成测试。集成测试通过真实 `ToolsService` 与工具执行流水线断言权限拦截，无需安装 Git Bash 或启动 DSH；由于插件只在 Windows 注册守卫，该用例在非 Windows 平台明确跳过。
 
 `npm run test:git-bash` 单独构建并运行 `test/harness.mjs`，需要 Windows 和可用的 Git Bash。它使用真实 cordis 与 dsh-bash-local 执行命令并断言检查结果，失败时返回非零退出码，不属于默认测试集，也不需要启动 DSH。
+
+变更记录见 [CHANGELOG.md](https://github.com/idlercloud/dsh-git-bash/blob/main/CHANGELOG.md)。
 
 ---
 
