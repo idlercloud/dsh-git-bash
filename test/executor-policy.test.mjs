@@ -93,5 +93,20 @@ for (const [layout, title] of [
     }
     assert.equal(spawns, 1);
     assert.equal(probes, 1);
+    const workdirSpec = shell.resolve({
+      command: 'pwd',
+      workdir: '/c/tmp',
+      sandboxPolicy: { mode: 'danger-full-access', workspaceRoot: process.cwd() },
+    });
+    assert.equal(workdirSpec.workdir, 'C:/tmp');
+    assert.throws(
+      () =>
+        shell.resolve({
+          command: 'pwd',
+          workdir: '/tmp',
+          sandboxPolicy: { mode: 'danger-full-access', workspaceRoot: process.cwd() },
+        }),
+      { code: 'GIT_BASH_INVALID_WORKDIR' },
+    );
   });
 }

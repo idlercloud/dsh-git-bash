@@ -116,6 +116,15 @@ describe('installBashGuard', () => {
     assert.deepEqual(policy.requests, []);
   });
 
+  it('调用方看不到该工具时不接管', () => {
+    const tools = fakeTools({ get: (_name, scope) => (scope === undefined ? BASH_DEFINITION : undefined) });
+    const policy = fakePolicy({ failure: new Error('must not be consulted') });
+    const { check } = install({ policy: policy.service, tools });
+
+    assert.equal(check({ name: BASH_TOOL_NAME, agent: { session: {} } }), undefined);
+    assert.deepEqual(policy.requests, []);
+  });
+
   it('完全权限下放行', () => {
     const policy = fakePolicy({ mode: FULL_ACCESS_MODE });
     const { check } = install({ policy: policy.service });
