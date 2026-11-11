@@ -58,7 +58,7 @@ In a narrower session, the model can retry the same command with `sandbox_permis
 - Git for Windows installed (provides `bash.exe`).
 - DSH `0.2.2-rc.1`.
 
-Desktop is a special case: normally install through the built-in plugin manager by entering the package name `@idlercloud/dsh-git-bash`. To install a specific version, enter `@idlercloud/dsh-git-bash@0.2.0`.
+Desktop is a special case: normally install through the built-in plugin manager by entering the package name `@idlercloud/dsh-git-bash`. To install a specific version, enter `@idlercloud/dsh-git-bash@0.3.0`.
 
 Otherwise, install into the target profile:
 

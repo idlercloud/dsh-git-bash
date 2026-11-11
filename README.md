@@ -58,7 +58,7 @@ Git Bash 是 MSYS2 进程，在 Windows 受限令牌下需要 fork、管道与�
 - 已安装 Git for Windows（含 `bash.exe`）。
 - DSH `0.2.2-rc.1`。
 
-桌面端是特殊的，一般通过内置的插件管理器安装，输入包名 `@idlercloud/dsh-git-bash` 即可安装，如需安装特定版本，可以输入 `@idlercloud/dsh-git-bash@0.2.0`。
+桌面端是特殊的，一般通过内置的插件管理器安装，输入包名 `@idlercloud/dsh-git-bash` 即可安装，如需安装特定版本，可以输入 `@idlercloud/dsh-git-bash@0.3.0`。
 
 其他情况下，把插件安装到目标 profile：
 
