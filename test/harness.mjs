@@ -87,10 +87,6 @@ it('真实 Git Bash 执行与插件隔离', async (t) => {
   t.after(() => root.fiber.dispose());
   root.provide('subprocess', makeSubprocess());
   root.provide('shell', 'PWSH-EXECUTOR-PLACEHOLDER');
-  root.provide('tools', {
-    get: () => ({ name: 'bash' }),
-    guard: () => () => {},
-  });
 
   // ---- A) 插件路径：通过真实 cordis plugin 挂载（有 fiber） ----
   const realm = root.isolate('shell');

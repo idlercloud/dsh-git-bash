@@ -36,9 +36,11 @@
 
 目前仅在 DSH `0.2.2-rc.1` 上验证，兼容性声明与 DSH peer 依赖均限定为该版本。升级 DSH 前需要重新验证本插件。
 
-**不经过文件沙箱，因此只在完全权限下运行**。
+**不经过文件沙箱，只在 `danger-full-access` 下运行。**
 
-Git Bash 是 MSYS2 进程，在 Windows 受限令牌下需要 fork、管道与私有临时目录，行为不可靠，所以本插件没有可用的沙箱后端。插件会在调用工具前检查文件策略，非完全权限会直接拒绝调用。
+Git Bash 是 MSYS2 进程，在 Windows 受限令牌下需要 fork、管道与私有临时目录，行为不可靠，所以本插件没有可用的沙箱后端。插件在 spawn 之前检查这次调用的文件策略，不是 `danger-full-access` 就拒绝。
+
+受限会话里，模型可以带 `sandbox_permissions: "danger-full-access"` 和 `justification` 重试同一条命令，由宿主弹出审批；批准只对这一次调用生效，会话策略不变。宿主没有装配审批服务时，这条路径不可用，只能切换会话策略或改用 `pwsh`。
 
 ## 非目标
 
@@ -121,7 +123,7 @@ npm test
 npm run test:git-bash
 ```
 
-`npm test` 会先构建，再运行单元测试和真实工具服务集成测试。集成测试通过真实 `ToolsService` 与工具执行流水线断言权限拦截，无需安装 Git Bash 或启动 DSH；由于插件只在 Windows 注册守卫，该用例在非 Windows 平台明确跳过。
+`npm test` 会先构建，再运行单元测试和真实工具服务集成测试。集成测试通过真实 `ToolsService` 与工具执行流水线断言权限拦截与单次提权流程，无需安装 Git Bash 或启动 DSH；由于插件只在 Windows 执行该检查，该用例在非 Windows 平台明确跳过。
 
 `npm run test:git-bash` 单独构建并运行 `test/harness.mjs`，需要 Windows 和可用的 Git Bash。它使用真实 cordis 与 dsh-bash-local 执行命令并断言检查结果，失败时返回非零退出码，不属于默认测试集，也不需要启动 DSH。
 

@@ -36,9 +36,11 @@ In addition, the existing pwsh tool is still kept, because cases such as the reg
 
 Currently verified only with DSH `0.2.2-rc.1`. Both the compatibility declaration and DSH peer dependencies are restricted to that version. Revalidate the plugin before upgrading DSH.
 
-**It does not go through a file sandbox, so it runs only under full access.**
+**It does not go through a file sandbox, so it runs only under `danger-full-access`.**
 
-Git Bash is an MSYS2 process. Under the Windows restricted token it needs fork, pipes and a private temp directory, and behaves unreliably, so this plugin has no usable sandbox backend. The plugin checks the file policy before invoking the tool and refuses non-full-access calls outright.
+Git Bash is an MSYS2 process. Under the Windows restricted token it needs fork, pipes and a private temp directory, and behaves unreliably, so this plugin has no usable sandbox backend. The plugin checks the file policy of each call before spawning and refuses anything other than `danger-full-access`.
+
+In a narrower session, the model can retry the same command with `sandbox_permissions: "danger-full-access"` and a `justification`; the host asks the user for approval, and the grant applies to that one call only. When the host composes no approval service, that path is unavailable, so use `pwsh` or switch the session policy.
 
 ## Non-goals
 
@@ -121,7 +123,7 @@ npm test
 npm run test:git-bash
 ```
 
-`npm test` builds and runs unit tests plus a real tool-service integration test. The integration test asserts permission enforcement through the real `ToolsService` and execution pipeline, without Git Bash or a running DSH instance. It explicitly skips non-Windows platforms because the plugin only registers its guard on Windows.
+`npm test` builds and runs unit tests plus a real tool-service integration test. The integration test asserts permission enforcement and the one-time escalation flow through the real `ToolsService` and execution pipeline, without Git Bash or a running DSH instance. It explicitly skips non-Windows platforms because the check runs only on Windows.
 
 `npm run test:git-bash` separately builds and runs `test/harness.mjs`, requiring Windows and an available Git Bash installation. It executes commands through real cordis and dsh-bash-local and asserts the results, returning a nonzero exit code on failure. It is excluded from the default test suite and does not require starting DSH.
 

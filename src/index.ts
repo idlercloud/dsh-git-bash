@@ -7,7 +7,7 @@
  * 本插件只做三件事：
  * - 解析 Git for Windows 里 bash.exe 的绝对路径并调用
  * - 给模型补一段系统提示词，说明这个是 MSYS 的 bash；
- * - 在会话文件策略不是完全权限时，于 spawn 之前拒绝 `bash` 调用。
+ * - 文件策略不是完全权限时，于 spawn 之前拒绝 `bash` 调用；受限会话可申请单次提权。
  *
  * @module dsh-git-bash
  */
@@ -16,14 +16,14 @@ import type { Context } from '@deepseek-ai/cordis';
 import { type Config as BashConfig, LocalBashExecutor } from '@deepseek-ai/dsh-bash-local';
 import type { ShellExecRequest, ShellExecSpec, ShellExecution } from '@deepseek-ai/dsh-shell';
 import z from '@deepseek-ai/schemastery';
-import { bashDenialReason, FULL_ACCESS_MODE, installBashGuard } from './guard.js';
+import { bashDenialReason, FULL_ACCESS_MODE } from './policy.js';
 import { installGitBashPrompt } from './prompt.js';
 import { BashResolver } from './resolve.js';
 import { normalizeWorkdir } from './workdir.js';
 
 /** 加载器读取的插件元数据。 */
 export const name = '@idlercloud/dsh-git-bash';
-export const inject = ['subprocess', 'tools'];
+export const inject = ['subprocess'];
 export const Config = z.object({
   ...LocalBashExecutor.Config.dict,
   bashPath: z.string().description('Git Bash 路径，可使用绝对路径、相对路径或 PATH 中的可执行文件名。'),
@@ -47,7 +47,11 @@ class GitBashExecutor extends LocalBashExecutor {
   }
 
   assertPolicy(spec: Pick<ShellExecRequest, 'sandboxPolicy'>): void {
-    const reason = bashDenialReason({ mode: spec.sandboxPolicy?.mode });
+    // 工具会把审批通过的调用级 policy 写进 spec，所以这里看到的是升级后的模式。
+    const reason = bashDenialReason({
+      mode: spec.sandboxPolicy?.mode,
+      escalationAvailable: this.ctx.get('approval') !== undefined,
+    });
     if (reason) {
       const error: NodeJS.ErrnoException = new Error(reason);
       error.code = 'GIT_BASH_POLICY_DENIED';
@@ -101,7 +105,7 @@ class GitBashExecutor extends LocalBashExecutor {
 }
 
 /**
- * 挂载执行器与权限闸门。
+ * 挂载执行器与系统提示词。
  *
  * @param ctx - 挂载点 context（位于 isolate 隔离作用域内）。
  * @param config - 组合条目配置，可含 bashPath / cwd / timeoutMs 等。
@@ -112,9 +116,8 @@ export function apply(ctx: Context, config: PluginConfig): void {
 
   const resolver = new BashResolver({ bashPath: config.bashPath });
   installGitBashPrompt(ctx);
-  installBashGuard(ctx);
   ctx.logger.info(
-    'dsh-git-bash: `bash` is denied before spawn unless the session file policy is `%s`.',
+    'dsh-git-bash: `bash` requires `%s`; a narrower file policy can request per-call approval.',
     FULL_ACCESS_MODE,
   );
   // 构造即注册：构造函数把执行器挂到隔离作用域的 ctx.shell 上，实例由 context 持有。

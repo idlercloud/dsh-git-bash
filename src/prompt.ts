@@ -34,7 +34,8 @@ export const GIT_BASH_PROMPT =
   '`workdir` accepts Windows paths (`C:/...`) and MSYS drive paths (`/c/...`, normalized to `C:/...`); ' +
   'drive-less MSYS paths such as `/tmp` are rejected. `workdir` is not shell-expanded, so `~` and `$VAR` ' +
   'are taken literally. ' +
-  'This tool does not support a file sandbox, so it is available only under `danger-full-access`. ' +
+  'This tool has no file sandbox: under a narrower policy, widen this call directly to ' +
+  '`danger-full-access`; `workspace-write` does not make Git Bash runnable. ' +
   'Prefer `bash` for command-line work. Use `pwsh` only when the task is Windows-native, such as cmdlets, ' +
   'the registry, services, and WMI, or when `bash` is unavailable.';
 
