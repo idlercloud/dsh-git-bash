@@ -15,7 +15,7 @@
  * - GIT_INSTALL_ROOT
  * - 注册表 InstallPath
  * - 常见安装位置
- * - where git / where bash。
+ * - PATH 中的 git.exe 反推。
  *
  * @module dsh-git-bash
  */

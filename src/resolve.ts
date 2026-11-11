@@ -6,25 +6,25 @@
  *   2. GIT_INSTALL_ROOT
  *   3. 注册表 InstallPath（HKCU、HKLM、WOW6432Node）
  *   4. 常见安装位置
- *   5. where git 反推安装根
- *   6. where bash
+ *   5. PATH 中 git.exe 反推安装根
  *
  * 每个候选先判断是否存在；`%SystemRoot%\System32\bash.exe` 与
  * `%LOCALAPPDATA%\Microsoft\WindowsApps\bash.exe` 是 WSL 启动器，直接跳过。
- * 显式配置里的裸名字先经 `where` 解析成 PATH 上的绝对路径。
+ * 显式配置里的裸名字直接从 PATH 解析成绝对路径。
  *
  * 解析结果会缓存。缓存命中时只复核文件是否还在，不再探测。配置变化时由新的解析器接管。
  *
  * @module dsh-git-bash/resolve
  */
 import { execFileSync } from 'node:child_process';
-import { lstatSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { lstatSync, statSync } from 'node:fs';
+import { dirname, join, win32 } from 'node:path';
 
-/** 构造选项；env、lstat、run 可在单测里换成假实现。 */
+/** 构造选项；env、stat、lstat、run 可在单测里换成假实现。 */
 export interface BashResolverOptions {
   bashPath?: string;
   env?: NodeJS.ProcessEnv;
+  stat?: typeof statSync;
   lstat?: typeof lstatSync;
   run?: typeof execFileSync;
 }
@@ -46,15 +46,25 @@ const hasSeparator = (value: string): boolean => value.includes('\\') || value.i
 
 export class BashResolver {
   private readonly env: NodeJS.ProcessEnv;
+  private readonly stat: typeof statSync;
   private readonly lstat: typeof lstatSync;
   private readonly run: typeof execFileSync;
   private readonly configuredPath: string | undefined;
   private cached: string | undefined;
 
   /** 配置与环境在创建时固定；配置变化时由新的解析器接管。 */
-  constructor({ bashPath, env = process.env, lstat = lstatSync, run = execFileSync }: BashResolverOptions = {}) {
+  constructor({
+    bashPath,
+    env = process.env,
+    stat = statSync,
+    lstat = lstatSync,
+    run = execFileSync,
+  }: BashResolverOptions = {}) {
     this.env = env;
-    this.configuredPath = bashPath || this.env.DSH_GIT_BASH;
+    const explicit = bashPath || this.env.DSH_GIT_BASH;
+    // 在创建时固定路径基准，避免执行命令的 workdir 或后续 cwd 变化影响程序位置。
+    this.configuredPath = explicit && hasSeparator(explicit) ? win32.resolve(explicit) : explicit;
+    this.stat = stat;
     this.lstat = lstat;
     this.run = run;
   }
@@ -100,15 +110,12 @@ export class BashResolver {
     if (env.USERPROFILE) add(join(env.USERPROFILE, 'scoop\\apps\\git\\current\\bin\\bash.exe'));
     if (env.ProgramData) add(join(env.ProgramData, 'chocolatey\\lib\\git\\tools\\bin\\bash.exe'));
 
-    // 5. where git 的命中反推安装根
-    for (const git of this.wherePaths('git')) {
+    // 5. PATH 中 git.exe 的命中反推安装根
+    for (const git of this.findExecutables('git')) {
       const dir = dirname(git);
       add(join(dir, '..\\bin\\bash.exe'));
       add(join(dir, '..\\usr\\bin\\bash.exe'));
     }
-
-    // 6. where bash 的直接命中
-    for (const bash of this.wherePaths('bash')) add(bash);
 
     return list;
   }
@@ -162,7 +169,7 @@ export class BashResolver {
 
   /**
    * 校验显式指定的 bash：路径必须存在且不是 WSL 启动器。
-   * 裸名字先经 `where` 解析成 PATH 上的第一个 Git Bash，返回其绝对路径。
+   * 裸名字从 PATH 选择第一个非 WSL 的 bash，返回其绝对路径。
    */
   private validateExplicit(value: string): string {
     if (hasSeparator(value)) {
@@ -171,7 +178,7 @@ export class BashResolver {
       return value;
     }
 
-    for (const candidate of this.wherePaths(value)) {
+    for (const candidate of this.findExecutables(value)) {
       if (this.isWslLauncher(candidate) || !this.exists(candidate)) continue;
       return candidate;
     }
@@ -193,17 +200,21 @@ export class BashResolver {
     return false;
   }
 
-  /** 该路径是否能 spawn。用 lstat 而不是 stat：Store 版应用别名是 reparse point。 */
   private exists(path: string): boolean {
     try {
-      const stat = this.lstat(path);
-      return stat.isFile() || stat.isSymbolicLink();
+      return this.stat(path).isFile();
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException)?.code !== 'EACCES') return false;
+    }
+    try {
+      const entry = this.lstat(path);
+      return entry.isFile() || entry.isSymbolicLink();
     } catch {
       return false;
     }
   }
 
-  /** 跑一条只读命令，失败时返回空串。注册表与 where 都走这里。 */
+  /** 跑一条只读命令，失败时返回空串。仅用于注册表查询。 */
   private runText(file: string, args: string[]): string {
     try {
       return this.run(file, args, { encoding: 'utf8', windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'] });
@@ -212,10 +223,18 @@ export class BashResolver {
     }
   }
 
-  private wherePaths(name: string): string[] {
-    return this.runText('where.exe', [name])
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter(Boolean);
+  private findExecutables(name: string): string[] {
+    const pathKey = Object.keys(this.env).find((key) => key.toUpperCase() === 'PATH');
+    const path = pathKey === undefined ? '' : (this.env[pathKey] ?? '');
+    if (win32.extname(name) && win32.extname(name).toLowerCase() !== '.exe') return [];
+    const executable = win32.extname(name) ? name : `${name}.exe`;
+    const hits: string[] = [];
+    for (const entry of path.split(';')) {
+      const directory = entry.trim().replace(/^"|"$/g, '');
+      if (!directory) continue;
+      const candidate = win32.resolve(directory, executable);
+      if (this.exists(candidate)) hits.push(candidate);
+    }
+    return hits;
   }
 }

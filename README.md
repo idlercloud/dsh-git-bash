@@ -63,7 +63,7 @@ Git Bash 是 MSYS2 进程，在 Windows 受限令牌下需要 fork、管道与�
 
 | 项 | 说明 |
 |---|---|
-| `bashPath` | 显式指定 `bash.exe` 绝对路径，优先级最高 |
+| `bashPath` | 显式指定 `bash.exe`，优先级最高；支持绝对路径、相对路径及裸名字。相对路径以插件挂载时 DSH 的当前目录为基准，裸名字会在 PATH 中查找 |
 | `DSH_GIT_BASH` | 同上，走环境变量 |
 | 其它字段 | 沿用上游 `dsh-bash-local` 的全部字段：`cwd`、`timeoutMs`、`maxOutputBytes` 等 |
 
@@ -73,8 +73,7 @@ Git Bash 是 MSYS2 进程，在 Windows 受限令牌下需要 fork、管道与�
 2. `GIT_INSTALL_ROOT`（Scoop 的 git 包会设）
 3. 注册表 `SOFTWARE\GitForWindows` 的 `InstallPath`，依次查 `HKCU`、`HKLM`、`HKLM\SOFTWARE\WOW6432Node`
 4. 常见安装位置：`%ProgramFiles%\Git\bin`、`%ProgramFiles(x86)%`、`%ProgramW6432%`、`%LOCALAPPDATA%\Programs\Git\bin`、`%USERPROFILE%\scoop`、Chocolatey
-5. `where git` 的每个命中反推安装根
-6. `where bash` 的直接命中
+5. PATH 中 `git.exe` 的每个命中反推安装根
 
 每个候选项都会检查其路径是否存在，存在且不是 WSL 启动器的第一个候选会被采用。`%SystemRoot%\System32\bash.exe` 是遗留的 WSL 启动器，`%LOCALAPPDATA%\Microsoft\WindowsApps\bash.exe` 是 WSL 的商店应用执行别名，两者都直接跳过。无合适候选项时报错，错误中列出尝试过的每条路径。
 

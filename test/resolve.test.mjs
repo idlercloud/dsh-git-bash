@@ -3,6 +3,7 @@
  */
 
 import assert from 'node:assert/strict';
+import { win32 } from 'node:path';
 import { describe, it } from 'node:test';
 
 import { BashResolver } from '../lib/resolve.js';
@@ -18,19 +19,19 @@ const ENV = {
 const normalize = (path) => String(path).replaceAll('/', '\\').toLowerCase();
 
 /**
- * 解析器的假依赖：files 决定 lstat 的结果，registryInstallPaths / whereHits
- * 决定 reg.exe 与 where.exe 的输出；recordedCalls 记录所有跑过的命令。
+ * 解析器的假依赖：files 决定 stat 的结果，registryInstallPaths
+ * 决定 reg.exe 的输出；pathFiles 提供 PATH 中的文件；recordedCalls 记录所有跑过的命令。
  */
 class MockRunner {
   recordedCalls = [];
 
-  constructor({ files = [], registryInstallPaths = {}, whereHits = {} } = {}) {
-    this.files = new Set(files.map(normalize));
+  constructor({ files = [], registryInstallPaths = {}, pathFiles = [] } = {}) {
+    this.files = new Set([...files, ...pathFiles].map(normalize));
     this.registryInstallPaths = registryInstallPaths;
-    this.whereHits = whereHits;
+    this.path = pathFiles.map((file) => win32.dirname(file)).join(';');
   }
 
-  lstat = (path) => {
+  stat = (path) => {
     if (!this.files.has(normalize(path))) throw new Error('ENOENT');
     return { isFile: () => true, isSymbolicLink: () => false };
   };
@@ -42,21 +43,95 @@ class MockRunner {
       if (!install) throw new Error('registry key not found');
       return `    InstallPath    REG_SZ    ${install}\n`;
     }
-    if (file === 'where.exe') {
-      const hits = this.whereHits[args[0]];
-      if (!hits?.length) throw new Error('not found');
-      return hits.join('\r\n');
-    }
     throw new Error(`unexpected probe: ${file}`);
   };
 }
 
 function resolverFor(runner, env = ENV, bashPath) {
-  return new BashResolver({ bashPath, env, lstat: runner.lstat, run: runner.run });
+  return new BashResolver({ bashPath, env: { PATH: runner.path, ...env }, stat: runner.stat, run: runner.run });
 }
 
 describe('BashResolver', () => {
-  it('显式配置存在时直接采用，不查注册表或 where', () => {
+  it('显式相对路径在构造时转成绝对路径，校验与返回使用同一路径', () => {
+    const relative = '.\\Git\\bin\\bash.exe';
+    const expected = win32.resolve(relative);
+    const runner = new MockRunner({ files: [expected] });
+    for (const resolver of [
+      resolverFor(runner, ENV, relative),
+      resolverFor(runner, { ...ENV, DSH_GIT_BASH: relative }),
+    ]) {
+      assert.equal(resolver.resolve(), expected);
+      assert.equal(resolver.resolve(), expected);
+    }
+  });
+
+  for (const [title, statResult, code, entry, accepted, fallback] of [
+    ['普通文件', true, undefined, undefined, true, false],
+    ['指向文件的链接', true, undefined, 'link', true, false],
+    ['目录', false, undefined, 'directory', false, false],
+    ['指向目录的链接', false, undefined, 'link', false, false],
+    ['断开的链接', undefined, 'ENOENT', 'link', false, false],
+    ['循环链接', undefined, 'ELOOP', 'link', false, false],
+    ['访问受限的应用别名', undefined, 'EACCES', 'link', true, true],
+    ['访问受限的普通文件', undefined, 'EACCES', 'file', true, true],
+    ['访问受限的目录', undefined, 'EACCES', 'directory', false, true],
+    ['回退检查也失败', undefined, 'EACCES', undefined, false, true],
+  ]) {
+    it(`文件检查：${title}`, () => {
+      let usedFallback = false;
+      const resolver = new BashResolver({
+        bashPath: 'C:\\Git\\bash.exe',
+        env: ENV,
+        stat() {
+          if (code) {
+            const error = new Error('模拟文件检查失败');
+            error.code = code;
+            throw error;
+          }
+          return { isFile: () => statResult };
+        },
+        lstat() {
+          usedFallback = true;
+          if (!entry) throw new Error('模拟回退检查失败');
+          return { isFile: () => entry === 'file', isSymbolicLink: () => entry === 'link' };
+        },
+      });
+      if (accepted) assert.equal(resolver.resolve(), 'C:\\Git\\bash.exe');
+      else assert.throws(() => resolver.resolve(), { code: 'GIT_BASH_NOT_FOUND' });
+      assert.equal(usedFallback, fallback);
+    });
+  }
+
+  it('PATH 保留中文和空格，忽略空项，并按目录顺序选择', () => {
+    const first = 'C:\\中文 工具\\bash.exe';
+    const second = 'D:\\Git\\bash.exe';
+    const runner = new MockRunner({ files: [first, second] });
+    const resolver = resolverFor(runner, { ...ENV, PATH: ' ; "C:\\中文 工具" ;;D:\\Git; ' }, 'bash');
+    assert.equal(resolver.resolve(), first);
+    assert.deepEqual(runner.recordedCalls, []);
+  });
+
+  it('支持 Path 环境变量拼写和带 exe 后缀的裸名字', () => {
+    const expected = 'C:\\Git\\bash.exe';
+    const runner = new MockRunner({ files: [expected] });
+    const resolver = new BashResolver({
+      bashPath: 'bash.exe',
+      env: { ...ENV, Path: 'C:\\Git' },
+      stat: runner.stat,
+      run: runner.run,
+    });
+    assert.equal(resolver.resolve(), expected);
+    assert.deepEqual(runner.recordedCalls, []);
+  });
+
+  it('不按 PATHEXT 选择批处理文件，也不隐式搜索当前目录', () => {
+    const runner = new MockRunner({ files: ['C:\\Git\\bash.cmd', win32.resolve('bash.exe')] });
+    const resolver = resolverFor(runner, { ...ENV, PATH: 'C:\\Git;;', PATHEXT: '.CMD;.EXE' }, 'bash');
+    assert.throws(() => resolver.resolve(), { code: 'GIT_BASH_NOT_FOUND' });
+    assert.deepEqual(runner.recordedCalls, []);
+  });
+
+  it('显式配置存在时直接采用，不启动子进程', () => {
     const expected = 'C:\\Git\\bin\\bash.exe';
     const runner = new MockRunner({ files: [expected] });
     const resolver = resolverFor(runner, { ...ENV, DSH_GIT_BASH: 'C:\\other\\bash.exe' }, expected);
@@ -86,13 +161,13 @@ describe('BashResolver', () => {
     const expected = 'C:\\Tools\\bash.exe';
     const runner = new MockRunner({
       files: [expected],
-      whereHits: { bash: [expected] },
+      pathFiles: [expected],
     });
     const resolver = resolverFor(runner, ENV, 'bash');
 
     assert.equal(resolver.resolve(), expected);
     assert.equal(resolver.resolve(), expected);
-    assert.deepEqual(runner.recordedCalls, [['where.exe', 'bash']]);
+    assert.deepEqual(runner.recordedCalls, []);
   });
 
   it('裸名字跳过 PATH 上的 WSL 启动器', () => {
@@ -101,7 +176,7 @@ describe('BashResolver', () => {
     const expected = 'C:\\Tools\\bash.exe';
     const runner = new MockRunner({
       files: [wsl, alias, expected],
-      whereHits: { bash: [wsl, alias, expected] },
+      pathFiles: [wsl, alias, expected],
     });
     const resolver = resolverFor(runner, ENV, 'bash');
 
@@ -110,7 +185,7 @@ describe('BashResolver', () => {
 
   it('裸名字在 PATH 上找不到 Git Bash 时拒绝', () => {
     const wsl = 'C:\\Windows\\System32\\bash.exe';
-    const resolver = resolverFor(new MockRunner({ files: [wsl], whereHits: { bash: [wsl] } }), ENV, 'bash');
+    const resolver = resolverFor(new MockRunner({ files: [wsl], pathFiles: [wsl] }), ENV, 'bash');
 
     assert.throws(
       () => resolver.resolve(),
@@ -187,24 +262,24 @@ describe('BashResolver', () => {
     ]);
   });
 
-  it('where git 的命中反推安装根', () => {
+  it('PATH 中 git.exe 的命中反推安装根', () => {
     const gitBash = 'C:\\Tools\\Git\\bin\\bash.exe';
     const runner = new MockRunner({
       files: [gitBash],
-      whereHits: { git: ['C:\\Tools\\Git\\cmd\\git.exe'] },
+      pathFiles: ['C:\\Tools\\Git\\cmd\\git.exe'],
     });
 
     assert.equal(resolverFor(runner).resolve(), gitBash);
   });
 
-  it('where bash 的直接命中', () => {
+  it('自动发现不采用 PATH 中独立的 bash.exe', () => {
     const gitBash = 'C:\\Tools\\bash.exe';
     const runner = new MockRunner({
       files: [gitBash],
-      whereHits: { bash: [gitBash] },
+      pathFiles: [gitBash],
     });
 
-    assert.equal(resolverFor(runner).resolve(), gitBash);
+    assert.throws(() => resolverFor(runner).resolve(), { code: 'GIT_BASH_NOT_FOUND' });
   });
 
   it('跳过 System32\\bash.exe', () => {
@@ -212,10 +287,10 @@ describe('BashResolver', () => {
     const gitBash = 'C:\\Tools\\bash.exe';
     const runner = new MockRunner({
       files: [wslBash, gitBash],
-      whereHits: { bash: [wslBash, gitBash] },
+      pathFiles: [wslBash, gitBash],
     });
 
-    assert.equal(resolverFor(runner).resolve(), gitBash);
+    assert.equal(resolverFor(runner, ENV, 'bash').resolve(), gitBash);
   });
 
   it('跳过 WindowsApps 下的商店别名', () => {
@@ -223,30 +298,30 @@ describe('BashResolver', () => {
     const gitBash = 'C:\\Tools\\bash.exe';
     const runner = new MockRunner({
       files: [alias, gitBash],
-      whereHits: { bash: [alias, gitBash] },
+      pathFiles: [alias, gitBash],
     });
 
-    assert.equal(resolverFor(runner).resolve(), gitBash);
+    assert.equal(resolverFor(runner, ENV, 'bash').resolve(), gitBash);
   });
 
   it('路径里带 System32 但不是系统目录时照常采用', () => {
     const gitBash = 'C:\\Tools\\System32\\bash.exe';
     const runner = new MockRunner({
       files: [gitBash],
-      whereHits: { bash: [gitBash] },
+      pathFiles: [gitBash],
     });
 
-    assert.equal(resolverFor(runner).resolve(), gitBash);
+    assert.equal(resolverFor(runner, ENV, 'bash').resolve(), gitBash);
   });
 
   it('路径里带 WindowsApps 但不是商店别名时照常采用', () => {
     const gitBash = 'C:\\Tools\\WindowsApps\\bash.exe';
     const runner = new MockRunner({
       files: [gitBash],
-      whereHits: { bash: [gitBash] },
+      pathFiles: [gitBash],
     });
 
-    assert.equal(resolverFor(runner).resolve(), gitBash);
+    assert.equal(resolverFor(runner, ENV, 'bash').resolve(), gitBash);
   });
 
   it('SystemRoot 不在 C: 时按完整路径跳过启动器', () => {
@@ -254,9 +329,9 @@ describe('BashResolver', () => {
     const gitBash = 'D:\\Tools\\bash.exe';
     const runner = new MockRunner({
       files: [launcher, gitBash],
-      whereHits: { bash: [launcher, gitBash] },
+      pathFiles: [launcher, gitBash],
     });
-    const resolver = resolverFor(runner, { ...ENV, SystemRoot: 'D:\\Windows' });
+    const resolver = resolverFor(runner, { ...ENV, SystemRoot: 'D:\\Windows' }, 'bash');
 
     assert.equal(resolver.resolve(), gitBash);
   });
@@ -265,15 +340,12 @@ describe('BashResolver', () => {
     const wsl = 'C:\\Windows\\System32\\bash.exe';
     const runner = new MockRunner({
       files: [wsl],
-      whereHits: { bash: [wsl] },
+      pathFiles: [wsl],
     });
 
     assert.throws(
       () => resolverFor(runner).resolve(),
-      (error) =>
-        error.code === 'GIT_BASH_NOT_FOUND' &&
-        error.message.includes('C:\\Program Files\\Git\\bin\\bash.exe') &&
-        error.message.includes('[skipped: WSL launcher]'),
+      (error) => error.code === 'GIT_BASH_NOT_FOUND' && error.message.includes('C:\\Program Files\\Git\\bin\\bash.exe'),
     );
   });
 
@@ -290,10 +362,10 @@ describe('BashResolver', () => {
   });
 
   it('缓存的文件消失后重新解析', () => {
-    const gitBash = 'C:\\Tools\\bash.exe';
+    const gitBash = 'C:\\Tools\\Git\\bin\\bash.exe';
     const runner = new MockRunner({
       files: [gitBash],
-      whereHits: { bash: [gitBash] },
+      pathFiles: ['C:\\Tools\\Git\\cmd\\git.exe'],
     });
     const resolver = resolverFor(runner);
 

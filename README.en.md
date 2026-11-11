@@ -63,7 +63,7 @@ Git Bash is an MSYS2 process. Under the Windows restricted token it needs fork, 
 
 | Item | Meaning |
 |---|---|
-| `bashPath` | Explicit absolute path to `bash.exe`; highest priority |
+| `bashPath` | Explicitly specifies `bash.exe`; highest priority. Accepts absolute paths, relative paths, and bare names. Relative paths are resolved against the DSH working directory when the plugin mounts; bare names are looked up on `PATH` |
 | `DSH_GIT_BASH` | Same as above, via the environment variable |
 | Other fields | All upstream `dsh-bash-local` fields are accepted: `cwd`, `timeoutMs`, `maxOutputBytes`, etc. |
 
@@ -73,8 +73,7 @@ Git Bash is an MSYS2 process. Under the Windows restricted token it needs fork, 
 2. `GIT_INSTALL_ROOT` (set by Scoop's git package)
 3. `InstallPath` under `SOFTWARE\GitForWindows`, checking `HKCU`, `HKLM`, then `HKLM\SOFTWARE\WOW6432Node`
 4. well-known locations: `%ProgramFiles%\Git\bin`, `%ProgramFiles(x86)%`, `%ProgramW6432%`, `%LOCALAPPDATA%\Programs\Git\bin`, `%USERPROFILE%\scoop`, Chocolatey
-5. the install root inferred from each `where git` hit
-6. direct `where bash` hits
+5. the install root inferred from each `git.exe` found on PATH
 
 Each candidate is checked for existence; the first existing candidate that is not a WSL launcher is used. `%SystemRoot%\System32\bash.exe` is the legacy WSL launcher and `%LOCALAPPDATA%\Microsoft\WindowsApps\bash.exe` is the Store app execution alias for WSL; both are skipped outright. If no candidate fits, the plugin reports an error listing every path it tried.
 

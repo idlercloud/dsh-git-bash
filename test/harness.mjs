@@ -13,7 +13,7 @@ import assert from 'node:assert/strict';
 import { spawn as nodeSpawn } from 'node:child_process';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, relative } from 'node:path';
 import { it } from 'node:test';
 import { Context } from '@deepseek-ai/cordis';
 import * as plugin from '@idlercloud/dsh-git-bash';
@@ -231,6 +231,21 @@ it('真实 Git Bash 执行与插件隔离', async (t) => {
   assert.equal(listenerVerdict, 'allow');
   assert.equal(verdict(bashCall(guardAgent)), 'deny');
   record('I6 监听器放行后仍被 guard 拒绝', `${listenerVerdict} -> ${verdict(bashCall(guardAgent))}`);
+
+  // 相对 bashPath 的定位不能受命令 workdir 影响。
+  const relativeRealm = root.isolate('shell');
+  const absoluteBash = new plugin.BashResolver().resolve();
+  await relativeRealm.plugin(plugin, { ...CONFIG, bashPath: relative(process.cwd(), absoluteBash) });
+  const relativeSpec = relativeRealm.shell.resolve({
+    command: 'printf relative-path-ok',
+    workdir: fixture,
+    sandboxPolicy: { mode: 'danger-full-access', workspaceRoot: fixture },
+  });
+  const relativeResult = await (await relativeRealm.shell.execute(relativeSpec)).result();
+  assert.equal(relativeResult.exitCode, 0);
+  assert.equal(relativeResult.stdout.text, 'relative-path-ok');
+  assert.equal(spawned.at(-1)[0], absoluteBash);
+  record('H0 相对 bashPath 切换工作目录后可执行', 'PASS');
 
   // ---- H) config 的 bashPath 覆盖（每次挂载独立解析器，放在最后） ----
   const realm3 = root.isolate('shell');
