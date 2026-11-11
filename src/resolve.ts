@@ -166,7 +166,10 @@ export class BashResolver {
     const target = canonicalPath(path);
     if (env.SystemRoot && canonicalPath(win32.join(env.SystemRoot, 'System32\\bash.exe')) === target) return true;
     if (env.windir && canonicalPath(win32.join(env.windir, 'System32\\bash.exe')) === target) return true;
-    if (env.LOCALAPPDATA && canonicalPath(win32.join(env.LOCALAPPDATA, 'Microsoft\\WindowsApps\\bash.exe')) === target) {
+    if (
+      env.LOCALAPPDATA &&
+      canonicalPath(win32.join(env.LOCALAPPDATA, 'Microsoft\\WindowsApps\\bash.exe')) === target
+    ) {
       return true;
     }
     return false;
