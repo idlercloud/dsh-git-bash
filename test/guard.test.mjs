@@ -18,6 +18,7 @@ function fakeTools({ get = () => BASH_DEFINITION } = {}) {
   const state = { guards: [] };
   state.service = {
     get,
+    executable: (name, scope, toolSet) => get(name, scope, toolSet),
     guard(fn) {
       state.guards.push(fn);
       return () => {

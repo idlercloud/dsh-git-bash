@@ -102,15 +102,15 @@ function collectFacts(ctx: Context, agent: ToolExecution['agent']): BashAccessFa
  * 这次 `bash` 调用是否属于本插件注册的工具。
  *
  * 工具层允许 agent 作用域的同名定义遮蔽全局工具。其他插件可能注册自己的 `bash`，
- * 策略与本插件不同；只按名字拦截会拒绝这些工具。因此比较调用方看到的定义与插件
- * 注册作用域中的定义：两者都存在且是同一个对象时才由本插件裁决。
+ * 策略与本插件不同；只按名字拦截会拒绝这些工具。因此比较调用方本步能执行的定义与
+ * 插件注册作用域中的定义：两者都存在且是同一个对象时才由本插件裁决。
  *
  * @param ctx - 插件 context。
  * @param exec - 待执行的工具调用。
  * @returns 该调用是否由本插件裁决。
  */
 function ownsBashCall(ctx: Context, exec: ToolExecution): boolean {
-  const visible = ctx.tools.get(BASH_TOOL_NAME, exec.agent);
+  const visible = ctx.tools.executable(BASH_TOOL_NAME, exec.agent, exec.toolSet);
   const registered = ctx.tools.get(BASH_TOOL_NAME, scopeOf(ctx));
   return visible !== undefined && visible === registered;
 }
