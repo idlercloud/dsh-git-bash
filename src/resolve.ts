@@ -13,7 +13,7 @@
  * `%LOCALAPPDATA%\Microsoft\WindowsApps\bash.exe` 是 WSL 启动器，直接跳过。
  * 显式配置里的裸名字先经 `where` 解析成 PATH 上的绝对路径。
  *
- * 解析结果会缓存。缓存命中时只复核文件是否还在，不再探测；configure 改配置会重置缓存。
+ * 解析结果会缓存。缓存命中时只复核文件是否还在，不再探测。配置变化时由新的解析器接管。
  *
  * @module dsh-git-bash/resolve
  */
@@ -21,8 +21,9 @@ import { execFileSync } from 'node:child_process';
 import { lstatSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
-/** 解析器可注入的依赖，单测用假实现。 */
+/** 构造选项；env、lstat、run 可在单测里换成假实现。 */
 export interface BashResolverOptions {
+  bashPath?: string;
   env?: NodeJS.ProcessEnv;
   lstat?: typeof lstatSync;
   run?: typeof execFileSync;
@@ -47,22 +48,15 @@ export class BashResolver {
   private readonly env: NodeJS.ProcessEnv;
   private readonly lstat: typeof lstatSync;
   private readonly run: typeof execFileSync;
-  private configuredPath: string | undefined;
+  private readonly configuredPath: string | undefined;
   private cached: string | undefined;
 
-  /**
-   * @param options - 可选的 env、lstat、run，单测用假实现。
-   */
-  constructor({ env = process.env, lstat = lstatSync, run = execFileSync }: BashResolverOptions = {}) {
+  /** 配置与环境在创建时固定；配置变化时由新的解析器接管。 */
+  constructor({ bashPath, env = process.env, lstat = lstatSync, run = execFileSync }: BashResolverOptions = {}) {
     this.env = env;
+    this.configuredPath = bashPath || this.env.DSH_GIT_BASH;
     this.lstat = lstat;
     this.run = run;
-  }
-
-  /** config 里的 bashPath；未设置时回退到 DSH_GIT_BASH。改配置会重置缓存。 */
-  configure(path?: string): void {
-    this.configuredPath = path;
-    this.cached = undefined;
   }
 
   /**
@@ -125,7 +119,7 @@ export class BashResolver {
    * @throws 显式配置不合法或找不到 Git Bash 时抛出带完整排查信息的错误（不静默回退到 WSL）。
    */
   resolve(): string {
-    // 缓存优先：上次解析成功的路径还在就直接用。显式配置变更由 configure 重置缓存。
+    // 缓存优先：上次解析成功的路径还在就直接用。
     let stale: string | undefined;
     if (this.cached) {
       if (this.exists(this.cached)) return this.cached;
@@ -134,7 +128,7 @@ export class BashResolver {
     }
 
     // 1. config 里的 bashPath / DSH_GIT_BASH：显式指定，经同样的校验后缓存。
-    const explicit = this.configuredPath || this.env.DSH_GIT_BASH;
+    const explicit = this.configuredPath;
     if (explicit) {
       this.cached = this.validateExplicit(explicit);
       return this.cached;

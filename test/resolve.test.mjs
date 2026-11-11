@@ -51,16 +51,15 @@ class MockRunner {
   };
 }
 
-function resolverFor(runner, env = ENV) {
-  return new BashResolver({ env, lstat: runner.lstat, run: runner.run });
+function resolverFor(runner, env = ENV, bashPath) {
+  return new BashResolver({ bashPath, env, lstat: runner.lstat, run: runner.run });
 }
 
 describe('BashResolver', () => {
   it('显式配置存在时直接采用，不查注册表或 where', () => {
     const expected = 'C:\\Git\\bin\\bash.exe';
     const runner = new MockRunner({ files: [expected] });
-    const resolver = resolverFor(runner, { ...ENV, DSH_GIT_BASH: 'C:\\other\\bash.exe' });
-    resolver.configure(expected);
+    const resolver = resolverFor(runner, { ...ENV, DSH_GIT_BASH: 'C:\\other\\bash.exe' }, expected);
 
     assert.equal(resolver.resolve(), expected);
     assert.deepEqual(runner.recordedCalls, []);
@@ -75,8 +74,7 @@ describe('BashResolver', () => {
   });
 
   it('显式配置的路径不存在时抛错', () => {
-    const resolver = resolverFor(new MockRunner());
-    resolver.configure('C:\\nope\\bash.exe');
+    const resolver = resolverFor(new MockRunner(), ENV, 'C:\\nope\\bash.exe');
 
     assert.throws(
       () => resolver.resolve(),
@@ -90,8 +88,7 @@ describe('BashResolver', () => {
       files: [expected],
       whereHits: { bash: [expected] },
     });
-    const resolver = resolverFor(runner);
-    resolver.configure('bash');
+    const resolver = resolverFor(runner, ENV, 'bash');
 
     assert.equal(resolver.resolve(), expected);
     assert.equal(resolver.resolve(), expected);
@@ -106,16 +103,14 @@ describe('BashResolver', () => {
       files: [wsl, alias, expected],
       whereHits: { bash: [wsl, alias, expected] },
     });
-    const resolver = resolverFor(runner);
-    resolver.configure('bash');
+    const resolver = resolverFor(runner, ENV, 'bash');
 
     assert.equal(resolver.resolve(), expected);
   });
 
   it('裸名字在 PATH 上找不到 Git Bash 时拒绝', () => {
     const wsl = 'C:\\Windows\\System32\\bash.exe';
-    const resolver = resolverFor(new MockRunner({ files: [wsl], whereHits: { bash: [wsl] } }));
-    resolver.configure('bash');
+    const resolver = resolverFor(new MockRunner({ files: [wsl], whereHits: { bash: [wsl] } }), ENV, 'bash');
 
     assert.throws(
       () => resolver.resolve(),
@@ -125,8 +120,7 @@ describe('BashResolver', () => {
 
   it('显式配置指向 WSL 启动器时拒绝', () => {
     const wslBash = 'C:\\Windows\\System32\\bash.exe';
-    const resolver = resolverFor(new MockRunner({ files: [wslBash] }));
-    resolver.configure(wslBash);
+    const resolver = resolverFor(new MockRunner({ files: [wslBash] }), ENV, wslBash);
 
     assert.throws(
       () => resolver.resolve(),
@@ -136,8 +130,7 @@ describe('BashResolver', () => {
 
   it('显式配置指向 WindowsApps 的商店别名时拒绝', () => {
     const alias = 'C:\\Users\\me\\AppData\\Local\\Microsoft\\WindowsApps\\bash.exe';
-    const resolver = resolverFor(new MockRunner({ files: [alias] }));
-    resolver.configure(alias);
+    const resolver = resolverFor(new MockRunner({ files: [alias] }), ENV, alias);
 
     assert.throws(
       () => resolver.resolve(),
@@ -145,17 +138,13 @@ describe('BashResolver', () => {
     );
   });
 
-  it('configure 重置缓存', () => {
+  it('构造时传入的 bashPath 优先于自动发现', () => {
     const root = 'C:\\Scoop\\apps\\git\\current';
     const auto = `${root}\\bin\\bash.exe`;
     const configured = 'C:\\Git\\bin\\bash.exe';
-    const runner = new MockRunner({
-      files: [auto, configured],
-    });
-    const resolver = resolverFor(runner, { ...ENV, GIT_INSTALL_ROOT: root });
+    const runner = new MockRunner({ files: [auto, configured] });
+    const resolver = resolverFor(runner, { ...ENV, GIT_INSTALL_ROOT: root }, configured);
 
-    assert.equal(resolver.resolve(), auto);
-    resolver.configure(configured);
     assert.equal(resolver.resolve(), configured);
   });
 

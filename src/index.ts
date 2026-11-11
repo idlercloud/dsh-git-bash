@@ -114,8 +114,7 @@ export function apply(ctx: Context, config: PluginConfig): void {
   // bundle 平台检查之外，直接加载插件时也不在其他平台注册执行器。
   if (process.platform !== 'win32') return;
 
-  const resolver = new BashResolver();
-  resolver.configure(config.bashPath);
+  const resolver = new BashResolver({ bashPath: config.bashPath });
   installGitBashPrompt(ctx);
   if (installBashGuard(ctx) !== undefined) {
     ctx.logger.info(
