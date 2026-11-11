@@ -236,6 +236,17 @@ describe('BashResolver', () => {
     assert.equal(resolverFor(runner).resolve(), gitBash);
   });
 
+  it('PATH 中的 git.exe 优先于常见安装位置', () => {
+    const gitBash = 'C:\\Tools\\Git\\bin\\bash.exe';
+    const commonBash = 'C:\\Program Files\\Git\\bin\\bash.exe';
+    const runner = new MockRunner({
+      files: [gitBash, commonBash],
+      pathFiles: ['C:\\Tools\\Git\\cmd\\git.exe'],
+    });
+
+    assert.equal(resolverFor(runner).resolve(), gitBash);
+  });
+
   it('自动发现不采用 PATH 中独立的 bash.exe', () => {
     const gitBash = 'C:\\Tools\\bash.exe';
     const runner = new MockRunner({

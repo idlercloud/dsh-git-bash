@@ -9,13 +9,6 @@
  * - 给模型补一段系统提示词，说明这个是 MSYS 的 bash；
  * - 在会话文件策略不是完全权限时，于 spawn 之前拒绝 `bash` 调用。
  *
- * 解析优先级：
- * - config 里的 bashPath
- * - 环境变量 DSH_GIT_BASH
- * - GIT_INSTALL_ROOT
- * - 常见安装位置
- * - PATH 中的 git.exe 反推。
- *
  * @module dsh-git-bash
  */
 

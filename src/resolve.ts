@@ -4,8 +4,8 @@
  * 顺序：
  *   1. config 里的 bashPath / 环境变量 DSH_GIT_BASH
  *   2. GIT_INSTALL_ROOT
- *   3. 常见安装位置
- *   4. PATH 中 git.exe 反推安装根
+ *   3. PATH 中 git.exe 反推安装根
+ *   4. 常见安装位置
  *
  * 每个候选先判断是否存在；`%SystemRoot%\System32\bash.exe` 与
  * `%LOCALAPPDATA%\Microsoft\WindowsApps\bash.exe` 是 WSL 启动器，直接跳过。
@@ -77,7 +77,14 @@ export class BashResolver {
     // 2. GIT_INSTALL_ROOT（Scoop 的 git 包会设）
     if (env.GIT_INSTALL_ROOT) addRoot(env.GIT_INSTALL_ROOT);
 
-    // 3. 常见安装位置
+    // 3. PATH 中 git.exe 的命中反推安装根
+    for (const git of this.findExecutables('git')) {
+      const dir = dirname(git);
+      add(join(dir, '..\\bin\\bash.exe'));
+      add(join(dir, '..\\usr\\bin\\bash.exe'));
+    }
+
+    // 4. 常见安装位置
     add(join(env.ProgramFiles ?? 'C:\\Program Files', 'Git\\bin\\bash.exe'));
     for (const key of ['ProgramFiles(x86)', 'ProgramW6432']) {
       const value = env[key];
@@ -85,13 +92,6 @@ export class BashResolver {
     }
     if (env.LOCALAPPDATA) add(join(env.LOCALAPPDATA, 'Programs\\Git\\bin\\bash.exe'));
     if (env.USERPROFILE) add(join(env.USERPROFILE, 'scoop\\apps\\git\\current\\bin\\bash.exe'));
-
-    // 4. PATH 中 git.exe 的命中反推安装根
-    for (const git of this.findExecutables('git')) {
-      const dir = dirname(git);
-      add(join(dir, '..\\bin\\bash.exe'));
-      add(join(dir, '..\\usr\\bin\\bash.exe'));
-    }
 
     return list;
   }
