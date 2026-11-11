@@ -73,7 +73,7 @@ Git Bash 是 MSYS2 进程，在 Windows 受限令牌下需要 fork、管道与�
 
 1. `config` 里的 `bashPath`，或环境变量 `DSH_GIT_BASH`
 2. `GIT_INSTALL_ROOT`（Scoop 的 git 包会设）
-3. 常见安装位置：`%ProgramFiles%\Git\bin`、`%ProgramFiles(x86)%`、`%ProgramW6432%`、`%LOCALAPPDATA%\Programs\Git\bin`、`%USERPROFILE%\scoop`、Chocolatey
+3. 常见安装位置：`%ProgramFiles%\Git\bin`、`%ProgramFiles(x86)%`、`%ProgramW6432%`、`%LOCALAPPDATA%\Programs\Git\bin`、`%USERPROFILE%\scoop`
 4. PATH 中 `git.exe` 的每个命中反推安装根
 
 每个候选项都会检查其路径是否存在，存在且不是 WSL 启动器的第一个候选会被采用。`%SystemRoot%\System32\bash.exe` 是遗留的 WSL 启动器，`%LOCALAPPDATA%\Microsoft\WindowsApps\bash.exe` 是 WSL 的商店应用执行别名，两者都直接跳过。无合适候选项时报错，错误中列出尝试过的每条路径。

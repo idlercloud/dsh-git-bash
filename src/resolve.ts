@@ -85,7 +85,6 @@ export class BashResolver {
     }
     if (env.LOCALAPPDATA) add(join(env.LOCALAPPDATA, 'Programs\\Git\\bin\\bash.exe'));
     if (env.USERPROFILE) add(join(env.USERPROFILE, 'scoop\\apps\\git\\current\\bin\\bash.exe'));
-    if (env.ProgramData) add(join(env.ProgramData, 'chocolatey\\lib\\git\\tools\\bin\\bash.exe'));
 
     // 4. PATH 中 git.exe 的命中反推安装根
     for (const git of this.findExecutables('git')) {

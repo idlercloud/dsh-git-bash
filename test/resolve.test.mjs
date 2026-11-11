@@ -13,7 +13,6 @@ const ENV = {
   ProgramFiles: 'C:\\Program Files',
   LOCALAPPDATA: 'C:\\Users\\me\\AppData\\Local',
   USERPROFILE: 'C:\\Users\\me',
-  ProgramData: 'C:\\ProgramData',
 };
 
 const normalize = (path) => String(path).replaceAll('/', '\\').toLowerCase();
