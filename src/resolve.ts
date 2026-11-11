@@ -121,10 +121,6 @@ export class BashResolver {
     if (stale) tried.push(`${stale}   [used earlier, no longer exists]`);
 
     for (const candidate of this.candidates()) {
-      if (this.isWslLauncher(candidate)) {
-        tried.push(`${candidate}   [skipped: WSL launcher]`);
-        continue;
-      }
       if (!this.exists(candidate)) {
         tried.push(candidate);
         continue;
