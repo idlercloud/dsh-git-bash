@@ -16,7 +16,7 @@
  * @module dsh-git-bash/resolve
  */
 import { lstatSync, statSync } from 'node:fs';
-import { dirname, join, win32 } from 'node:path';
+import { win32 } from 'node:path';
 
 /** 构造选项；env、stat、lstat 可在单测里换成假实现。 */
 export interface BashResolverOptions {
@@ -70,8 +70,8 @@ export class BashResolver {
       list.push(candidate);
     };
     const addRoot = (root: string): void => {
-      add(join(root, 'bin\\bash.exe'));
-      add(join(root, 'usr\\bin\\bash.exe'));
+      add(win32.join(root, 'bin\\bash.exe'));
+      add(win32.join(root, 'usr\\bin\\bash.exe'));
     };
 
     // 2. GIT_INSTALL_ROOT（Scoop 的 git 包会设）
@@ -79,19 +79,19 @@ export class BashResolver {
 
     // 3. PATH 中 git.exe 的命中反推安装根
     for (const git of this.findExecutables('git')) {
-      const dir = dirname(git);
-      add(join(dir, '..\\bin\\bash.exe'));
-      add(join(dir, '..\\usr\\bin\\bash.exe'));
+      const dir = win32.dirname(git);
+      add(win32.join(dir, '..\\bin\\bash.exe'));
+      add(win32.join(dir, '..\\usr\\bin\\bash.exe'));
     }
 
     // 4. 常见安装位置
-    add(join(env.ProgramFiles ?? 'C:\\Program Files', 'Git\\bin\\bash.exe'));
+    add(win32.join(env.ProgramFiles ?? 'C:\\Program Files', 'Git\\bin\\bash.exe'));
     for (const key of ['ProgramFiles(x86)', 'ProgramW6432']) {
       const value = env[key];
-      if (value) add(join(value, 'Git\\bin\\bash.exe'));
+      if (value) add(win32.join(value, 'Git\\bin\\bash.exe'));
     }
-    if (env.LOCALAPPDATA) add(join(env.LOCALAPPDATA, 'Programs\\Git\\bin\\bash.exe'));
-    if (env.USERPROFILE) add(join(env.USERPROFILE, 'scoop\\apps\\git\\current\\bin\\bash.exe'));
+    if (env.LOCALAPPDATA) add(win32.join(env.LOCALAPPDATA, 'Programs\\Git\\bin\\bash.exe'));
+    if (env.USERPROFILE) add(win32.join(env.USERPROFILE, 'scoop\\apps\\git\\current\\bin\\bash.exe'));
 
     return list;
   }
@@ -164,9 +164,9 @@ export class BashResolver {
   private isWslLauncher(path: string): boolean {
     const env = this.env;
     const target = canonicalPath(path);
-    if (env.SystemRoot && canonicalPath(join(env.SystemRoot, 'System32\\bash.exe')) === target) return true;
-    if (env.windir && canonicalPath(join(env.windir, 'System32\\bash.exe')) === target) return true;
-    if (env.LOCALAPPDATA && canonicalPath(join(env.LOCALAPPDATA, 'Microsoft\\WindowsApps\\bash.exe')) === target) {
+    if (env.SystemRoot && canonicalPath(win32.join(env.SystemRoot, 'System32\\bash.exe')) === target) return true;
+    if (env.windir && canonicalPath(win32.join(env.windir, 'System32\\bash.exe')) === target) return true;
+    if (env.LOCALAPPDATA && canonicalPath(win32.join(env.LOCALAPPDATA, 'Microsoft\\WindowsApps\\bash.exe')) === target) {
       return true;
     }
     return false;
