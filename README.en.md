@@ -34,6 +34,8 @@ In addition, the existing pwsh tool is still kept, because cases such as the reg
 
 ## Limitations
 
+Currently verified only with DSH `0.2.2-rc.1`. Both the compatibility declaration and DSH peer dependencies are restricted to that version. Revalidate the plugin before upgrading DSH.
+
 **It does not go through a file sandbox, so it runs only under full access.**
 
 Git Bash is an MSYS2 process. Under the Windows restricted token it needs fork, pipes and a private temp directory, and behaves unreliably, so this plugin has no usable sandbox backend. The plugin checks the file policy before invoking the tool and refuses non-full-access calls outright.

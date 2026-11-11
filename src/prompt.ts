@@ -31,7 +31,7 @@ export const GIT_BASH_PROMPT =
   'In this shell `/c/...`, `~`, and `/tmp` are MSYS paths, and an unquoted `C:\\...` drops its backslashes, ' +
   'so write drive paths as `/c/...` or quoted `C:/...`; paths handed to other file tools (such as `read` and ' +
   '`write`) usually stay Windows paths. ' +
-  'Pass `workdir` as a Windows path (for example `C:/...`); MSYS paths only work inside the command string. ' +
+  '`workdir` does not support MSYS paths such as `/tmp` or shell expansion such as `~`. ' +
   'This tool does not support a file sandbox, so it is available only under `danger-full-access`. ' +
   'Prefer `bash` for command-line work. Use `pwsh` only when the task is Windows-native, such as cmdlets, ' +
   'the registry, services, and WMI, or when `bash` is unavailable.';
