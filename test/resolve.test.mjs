@@ -106,6 +106,42 @@ describe('BashResolver', () => {
     assert.equal(resolver.resolve(), expected);
   });
 
+  it('显式名字带非 exe 扩展名时不按 PATH 解析', () => {
+    const runner = new MockRunner({
+      files: ['C:\\Tools\\bash.cmd'],
+      pathFiles: ['C:\\Tools\\bash.cmd'],
+    });
+    const resolver = resolverFor(runner, ENV, 'bash.cmd');
+
+    assert.throws(
+      () => resolver.resolve(),
+      (error) => error.code === 'GIT_BASH_NOT_FOUND' && error.message.includes('on PATH'),
+    );
+  });
+
+  it('环境变量没有 PATH 时裸名字报找不到', () => {
+    const env = { ...ENV };
+    delete env.PATH;
+    const runner = new MockRunner();
+
+    const resolver = new BashResolver({ bashPath: 'bash', env, stat: runner.stat });
+    assert.throws(
+      () => resolver.resolve(),
+      (error) => error.code === 'GIT_BASH_NOT_FOUND' && error.message.includes('on PATH'),
+    );
+  });
+
+  it('PATH 键存在但值为空时按空 PATH 处理', () => {
+    const runner = new MockRunner();
+    const resolver = new BashResolver({
+      bashPath: 'bash',
+      env: { ...ENV, PATH: undefined },
+      stat: runner.stat,
+    });
+
+    assert.throws(() => resolver.resolve(), { code: 'GIT_BASH_NOT_FOUND' });
+  });
+
   it('不按 PATHEXT 选择批处理文件，也不隐式搜索当前目录', () => {
     const runner = new MockRunner({ files: ['C:\\Git\\bash.cmd', win32.resolve('bash.exe')] });
     const resolver = resolverFor(runner, { ...ENV, PATH: 'C:\\Git;;', PATHEXT: '.CMD;.EXE' }, 'bash');
@@ -160,6 +196,18 @@ describe('BashResolver', () => {
     const resolver = resolverFor(runner, ENV, 'bash');
 
     assert.equal(resolver.resolve(), expected);
+  });
+
+  it('SystemRoot 与 windir 不同时仍按 windir 跳过 WSL 启动器', () => {
+    const wsl = 'C:\\Windows\\System32\\bash.exe';
+    const gitBash = 'C:\\Tools\\bash.exe';
+    const runner = new MockRunner({
+      files: [wsl, gitBash],
+      pathFiles: [wsl, gitBash],
+    });
+    const resolver = resolverFor(runner, { ...ENV, SystemRoot: 'D:\\Windows', windir: 'C:\\Windows' }, 'bash');
+
+    assert.equal(resolver.resolve(), gitBash);
   });
 
   it('裸名字在 PATH 上找不到 Git Bash 时拒绝', () => {
@@ -236,6 +284,32 @@ describe('BashResolver', () => {
     });
 
     assert.equal(resolverFor(runner).resolve(), gitBash);
+  });
+
+  it('常见安装位置包含 ProgramFiles(x86) 与 ProgramW6432，并去重重复候选', () => {
+    const env = {
+      ...ENV,
+      'ProgramFiles(x86)': 'C:\\Program Files (x86)',
+      ProgramW6432: 'C:\\Program Files',
+    };
+    const runner = new MockRunner({
+      files: ['C:\\Program Files\\Git\\bin\\bash.exe', 'C:\\Program Files (x86)\\Git\\bin\\bash.exe'],
+    });
+    const resolver = resolverFor(runner, env);
+
+    assert.equal(resolver.resolve(), 'C:\\Program Files\\Git\\bin\\bash.exe');
+    const candidates = resolver.candidates().map((candidate) => candidate.toLowerCase());
+    assert.ok(candidates.includes('c:\\program files (x86)\\git\\bin\\bash.exe'));
+    assert.equal(new Set(candidates).size, candidates.length);
+  });
+
+  it('ProgramFiles 缺失时回退到默认安装路径', () => {
+    const env = { ...ENV };
+    delete env.ProgramFiles;
+    const runner = new MockRunner({ files: ['C:\\Program Files\\Git\\bin\\bash.exe'] });
+    const resolver = resolverFor(runner, env);
+
+    assert.equal(resolver.resolve(), 'C:\\Program Files\\Git\\bin\\bash.exe');
   });
 
   it('自动发现不采用 PATH 中独立的 bash.exe', () => {
