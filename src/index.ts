@@ -43,7 +43,7 @@ export type PluginConfig = BashConfig & { bashPath?: string };
  *
  * 覆盖公开入口 `resolve` 与 `execute`：`resolve` 把 `workdir` 归一化成 Windows 路径，
  * `execute` 把 shell 换成解析到的 Git Bash，执行语义仍交给基类的 `executeArgv`。
- * 解析放在第一次 execute 里，挂载时不探测注册表、where 和 uname。
+ * 解析放在第一次 execute 里。
  */
 class GitBashExecutor extends LocalBashExecutor {
   get sandboxMode() {

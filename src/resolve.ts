@@ -9,9 +9,9 @@
  *   5. where git 反推安装根
  *   6. where bash
  *
- * 每个候选先判断是否存在，再跑 `uname -s` 确认是 MINGW / MSYS；
- * `%SystemRoot%\System32\bash.exe` 与 `%LOCALAPPDATA%\Microsoft\WindowsApps\bash.exe`
- * 是 WSL 启动器，直接跳过。显式配置里的裸名字先经 `where` 解析成 PATH 上的绝对路径。
+ * 每个候选先判断是否存在；`%SystemRoot%\System32\bash.exe` 与
+ * `%LOCALAPPDATA%\Microsoft\WindowsApps\bash.exe` 是 WSL 启动器，直接跳过。
+ * 显式配置里的裸名字先经 `where` 解析成 PATH 上的绝对路径。
  *
  * 解析结果会缓存。缓存命中时只复核文件是否还在，不再探测；configure 改配置会重置缓存。
  *
@@ -30,9 +30,6 @@ export interface BashResolverOptions {
 
 /** 比较路径用的归一化：统一分隔符，忽略大小写。 */
 const canonicalPath = (path: string): string => path.replaceAll('/', '\\').toLowerCase();
-
-/** Git Bash 的 `uname -s` 值：MINGW64_NT-10.0-… 或 MSYS_NT-…。 */
-const GIT_BASH_IDENTITY = /^(MINGW|MSYS)/i;
 
 /** 显式配置不合法时的错误。 */
 function invalidExplicit(value: string, detail: string): NodeJS.ErrnoException {
@@ -69,7 +66,7 @@ export class BashResolver {
   }
 
   /**
-   * 按可靠性排序列出候选 bash.exe，未做存在性与身份检查。
+   * 按可靠性排序列出候选 bash.exe，未做存在性检查。
    * @returns 候选路径（已去重）。
    */
   candidates(): string[] {
@@ -155,11 +152,6 @@ export class BashResolver {
         tried.push(candidate);
         continue;
       }
-      const identity = this.identityOf(candidate);
-      if (!GIT_BASH_IDENTITY.test(identity)) {
-        tried.push(`${candidate}   [rejected: ${identity || 'uname -s failed'}]`);
-        continue;
-      }
       this.cached = candidate;
       return candidate;
     }
@@ -175,24 +167,19 @@ export class BashResolver {
   }
 
   /**
-   * 校验显式指定的 bash：路径必须存在且不是 WSL 启动器，然后跑一次 `uname -s`。
+   * 校验显式指定的 bash：路径必须存在且不是 WSL 启动器。
    * 裸名字先经 `where` 解析成 PATH 上的第一个 Git Bash，返回其绝对路径。
    */
   private validateExplicit(value: string): string {
     if (hasSeparator(value)) {
       if (!this.exists(value)) throw invalidExplicit(value, 'no such file exists');
       if (this.isWslLauncher(value)) throw invalidExplicit(value, 'it is the WSL launcher, not Git Bash');
-      const identity = this.identityOf(value);
-      if (!GIT_BASH_IDENTITY.test(identity)) {
-        if (identity) throw invalidExplicit(value, `it reports "${identity}", not MINGW/MSYS`);
-        throw invalidExplicit(value, 'running `uname -s` failed');
-      }
       return value;
     }
 
     for (const candidate of this.wherePaths(value)) {
       if (this.isWslLauncher(candidate) || !this.exists(candidate)) continue;
-      if (GIT_BASH_IDENTITY.test(this.identityOf(candidate))) return candidate;
+      return candidate;
     }
     throw invalidExplicit(value, 'no Git Bash with that name is on PATH');
   }
@@ -226,20 +213,6 @@ export class BashResolver {
   private runText(file: string, args: string[]): string {
     try {
       return this.run(file, args, { encoding: 'utf8', windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'] });
-    } catch {
-      return '';
-    }
-  }
-
-  /** 问候选它是不是 Git Bash；超时或启动失败都算否。 */
-  private identityOf(file: string): string {
-    try {
-      return this.run(file, ['-c', 'uname -s'], {
-        encoding: 'utf8',
-        timeout: 5000,
-        windowsHide: true,
-        stdio: ['ignore', 'pipe', 'ignore'],
-      }).trim();
     } catch {
       return '';
     }

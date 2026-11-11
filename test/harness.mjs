@@ -5,7 +5,7 @@
  *   dsh-bash-local@0.2.2-rc.1），再从仓库根目录运行：
  *     node test/harness.mjs
  * 检查点：宿主 shell 未被顶替 / 隔离作用域内是本执行器 / settings 段零注册 /
- *         真实 Git Bash 身份 / 交给 spawn 的 argv0 是解析结果 / workdir 归一化 /
+ *         真实 bash 执行 / 交给 spawn 的 argv0 是解析结果 / workdir 归一化 /
  *         glob 与 $( ) 展开 / 退出码透传 / stderr 分离 / 非完全权限拒绝在 spawn 之前生效。
  */
 
@@ -147,12 +147,11 @@ it('真实 Git Bash 执行与插件隔离', async (t) => {
     return proc.result();
   };
 
-  const r1 = await run('echo "argv0=$0"; uname -s; echo "bash=$BASH_VERSION"');
+  const r1 = await run('echo "argv0=$0"; echo "bash=$BASH_VERSION"');
   assert.equal(r1.exitCode, 0);
-  assert.match(r1.stdout.text, /(?:MINGW|MSYS)[^\r\n]*/);
   assert.match(r1.stdout.text, /bash=\d+\./);
   assert.equal(spawned[0][0], new plugin.BashResolver().resolve());
-  record('C1 shell 身份', JSON.stringify(r1.stdout.text.trim()));
+  record('C1 shell 运行', JSON.stringify(r1.stdout.text.trim()));
   record('C1b 交给 spawn 的 argv0', spawned[0][0]);
 
   const r2 = await run(

@@ -18,17 +18,16 @@ const ENV = {
 const normalize = (path) => String(path).replaceAll('/', '\\').toLowerCase();
 
 /**
- * 解析器的假依赖：files 决定 lstat 的结果，registryInstallPaths / whereHits / unameOutputs
- * 决定 reg.exe、where.exe 与 `uname -s` 的输出；recordedCalls 记录所有跑过的命令。
+ * 解析器的假依赖：files 决定 lstat 的结果，registryInstallPaths / whereHits
+ * 决定 reg.exe 与 where.exe 的输出；recordedCalls 记录所有跑过的命令。
  */
 class MockRunner {
   recordedCalls = [];
 
-  constructor({ files = [], registryInstallPaths = {}, whereHits = {}, unameOutputs = {} } = {}) {
+  constructor({ files = [], registryInstallPaths = {}, whereHits = {} } = {}) {
     this.files = new Set(files.map(normalize));
     this.registryInstallPaths = registryInstallPaths;
     this.whereHits = whereHits;
-    this.unameOutputs = unameOutputs;
   }
 
   lstat = (path) => {
@@ -48,9 +47,7 @@ class MockRunner {
       if (!hits?.length) throw new Error('not found');
       return hits.join('\r\n');
     }
-    const output = this.unameOutputs[normalize(file)];
-    if (output === undefined) throw new Error(`unexpected probe: ${file}`);
-    return output;
+    throw new Error(`unexpected probe: ${file}`);
   };
 }
 
@@ -59,25 +56,19 @@ function resolverFor(runner, env = ENV) {
 }
 
 describe('BashResolver', () => {
-  it('显式配置存在时先校验身份，不查注册表或 where', () => {
+  it('显式配置存在时直接采用，不查注册表或 where', () => {
     const expected = 'C:\\Git\\bin\\bash.exe';
-    const runner = new MockRunner({
-      files: [expected],
-      unameOutputs: { [normalize(expected)]: 'MINGW64_NT-10.0-26300' },
-    });
+    const runner = new MockRunner({ files: [expected] });
     const resolver = resolverFor(runner, { ...ENV, DSH_GIT_BASH: 'C:\\other\\bash.exe' });
     resolver.configure(expected);
 
     assert.equal(resolver.resolve(), expected);
-    assert.deepEqual(runner.recordedCalls, [[expected, '-c', 'uname -s']]);
+    assert.deepEqual(runner.recordedCalls, []);
   });
 
   it('config 里没有 bashPath 时回退到 DSH_GIT_BASH', () => {
     const expected = 'C:\\other\\bash.exe';
-    const runner = new MockRunner({
-      files: [expected],
-      unameOutputs: { [normalize(expected)]: 'MINGW64_NT-10.0-26300' },
-    });
+    const runner = new MockRunner({ files: [expected] });
     const resolver = resolverFor(runner, { ...ENV, DSH_GIT_BASH: expected });
 
     assert.equal(resolver.resolve(), expected);
@@ -98,17 +89,13 @@ describe('BashResolver', () => {
     const runner = new MockRunner({
       files: [expected],
       whereHits: { bash: [expected] },
-      unameOutputs: { [normalize(expected)]: 'MINGW64_NT-10.0-26300' },
     });
     const resolver = resolverFor(runner);
     resolver.configure('bash');
 
     assert.equal(resolver.resolve(), expected);
     assert.equal(resolver.resolve(), expected);
-    assert.deepEqual(runner.recordedCalls, [
-      ['where.exe', 'bash'],
-      [expected, '-c', 'uname -s'],
-    ]);
+    assert.deepEqual(runner.recordedCalls, [['where.exe', 'bash']]);
   });
 
   it('裸名字跳过 PATH 上的 WSL 启动器', () => {
@@ -118,7 +105,6 @@ describe('BashResolver', () => {
     const runner = new MockRunner({
       files: [wsl, alias, expected],
       whereHits: { bash: [wsl, alias, expected] },
-      unameOutputs: { [normalize(expected)]: 'MINGW64_NT-10.0-26300' },
     });
     const resolver = resolverFor(runner);
     resolver.configure('bash');
@@ -159,40 +145,12 @@ describe('BashResolver', () => {
     );
   });
 
-  it('显式配置的身份不是 MINGW / MSYS 时拒绝', () => {
-    const path = 'C:\\Tools\\bash.exe';
-    const runner = new MockRunner({ files: [path], unameOutputs: { [normalize(path)]: 'Linux' } });
-    const resolver = resolverFor(runner);
-    resolver.configure(path);
-
-    assert.throws(
-      () => resolver.resolve(),
-      (error) => error.code === 'GIT_BASH_NOT_FOUND' && error.message.includes('Linux'),
-    );
-  });
-
-  it('显式配置跑不出 uname -s 时拒绝', () => {
-    const path = 'C:\\Tools\\bash.exe';
-    const runner = new MockRunner({ files: [path] });
-    const resolver = resolverFor(runner);
-    resolver.configure(path);
-
-    assert.throws(
-      () => resolver.resolve(),
-      (error) => error.code === 'GIT_BASH_NOT_FOUND' && error.message.includes('uname -s'),
-    );
-  });
-
   it('configure 重置缓存', () => {
     const root = 'C:\\Scoop\\apps\\git\\current';
     const auto = `${root}\\bin\\bash.exe`;
     const configured = 'C:\\Git\\bin\\bash.exe';
     const runner = new MockRunner({
       files: [auto, configured],
-      unameOutputs: {
-        [normalize(auto)]: 'MINGW64_NT-10.0-26300',
-        [normalize(configured)]: 'MINGW64_NT-10.0-26300',
-      },
     });
     const resolver = resolverFor(runner, { ...ENV, GIT_INSTALL_ROOT: root });
 
@@ -205,10 +163,7 @@ describe('BashResolver', () => {
     const root = 'C:\\Scoop\\apps\\git\\current';
     const auto = `${root}\\bin\\bash.exe`;
     const env = { ...ENV, GIT_INSTALL_ROOT: root };
-    const runner = new MockRunner({
-      files: [auto],
-      unameOutputs: { [normalize(auto)]: 'MINGW64_NT-10.0-26300' },
-    });
+    const runner = new MockRunner({ files: [auto] });
     const resolver = resolverFor(runner, env);
 
     assert.equal(resolver.resolve(), auto);
@@ -219,10 +174,7 @@ describe('BashResolver', () => {
   it('GIT_INSTALL_ROOT 命中 usr\\bin 下的 bash.exe', () => {
     const root = 'C:\\Scoop\\apps\\git\\current';
     const gitBash = `${root}\\usr\\bin\\bash.exe`;
-    const runner = new MockRunner({
-      files: [gitBash],
-      unameOutputs: { [normalize(gitBash)]: 'MINGW64_NT-10.0-26300' },
-    });
+    const runner = new MockRunner({ files: [gitBash] });
     const resolver = resolverFor(runner, { ...ENV, GIT_INSTALL_ROOT: root });
 
     assert.equal(resolver.resolve(), gitBash);
@@ -234,7 +186,6 @@ describe('BashResolver', () => {
     const runner = new MockRunner({
       files: [gitBash],
       registryInstallPaths: { 'HKLM\\SOFTWARE\\WOW6432Node\\GitForWindows': root },
-      unameOutputs: { [normalize(gitBash)]: 'MINGW64_NT-10.0-26300' },
     });
     const resolver = resolverFor(runner);
 
@@ -252,7 +203,6 @@ describe('BashResolver', () => {
     const runner = new MockRunner({
       files: [gitBash],
       whereHits: { git: ['C:\\Tools\\Git\\cmd\\git.exe'] },
-      unameOutputs: { [normalize(gitBash)]: 'MINGW64_NT-10.0-26300' },
     });
 
     assert.equal(resolverFor(runner).resolve(), gitBash);
@@ -263,61 +213,48 @@ describe('BashResolver', () => {
     const runner = new MockRunner({
       files: [gitBash],
       whereHits: { bash: [gitBash] },
-      unameOutputs: { [normalize(gitBash)]: 'MSYS_NT-10.0-26300' },
     });
 
     assert.equal(resolverFor(runner).resolve(), gitBash);
   });
 
-  it('跳过 System32\\bash.exe，不做身份探测', () => {
+  it('跳过 System32\\bash.exe', () => {
     const wslBash = 'C:\\Windows\\System32\\bash.exe';
     const gitBash = 'C:\\Tools\\bash.exe';
     const runner = new MockRunner({
       files: [wslBash, gitBash],
       whereHits: { bash: [wslBash, gitBash] },
-      unameOutputs: { [normalize(gitBash)]: 'MINGW64_NT-10.0-26300' },
     });
 
     assert.equal(resolverFor(runner).resolve(), gitBash);
-    assert.equal(
-      runner.recordedCalls.some(([file]) => normalize(file) === normalize(wslBash)),
-      false,
-    );
   });
 
-  it('跳过 WindowsApps 下的商店别名，不做身份探测', () => {
+  it('跳过 WindowsApps 下的商店别名', () => {
     const alias = 'C:\\Users\\me\\AppData\\Local\\Microsoft\\WindowsApps\\bash.exe';
     const gitBash = 'C:\\Tools\\bash.exe';
     const runner = new MockRunner({
       files: [alias, gitBash],
       whereHits: { bash: [alias, gitBash] },
-      unameOutputs: { [normalize(gitBash)]: 'MINGW64_NT-10.0-26300' },
     });
 
     assert.equal(resolverFor(runner).resolve(), gitBash);
-    assert.equal(
-      runner.recordedCalls.some(([file]) => normalize(file) === normalize(alias)),
-      false,
-    );
   });
 
-  it('路径里带 System32 但不是系统目录时照常探测', () => {
+  it('路径里带 System32 但不是系统目录时照常采用', () => {
     const gitBash = 'C:\\Tools\\System32\\bash.exe';
     const runner = new MockRunner({
       files: [gitBash],
       whereHits: { bash: [gitBash] },
-      unameOutputs: { [normalize(gitBash)]: 'MINGW64_NT-10.0-26300' },
     });
 
     assert.equal(resolverFor(runner).resolve(), gitBash);
   });
 
-  it('路径里带 WindowsApps 但不是商店别名时照常探测', () => {
+  it('路径里带 WindowsApps 但不是商店别名时照常采用', () => {
     const gitBash = 'C:\\Tools\\WindowsApps\\bash.exe';
     const runner = new MockRunner({
       files: [gitBash],
       whereHits: { bash: [gitBash] },
-      unameOutputs: { [normalize(gitBash)]: 'MINGW64_NT-10.0-26300' },
     });
 
     assert.equal(resolverFor(runner).resolve(), gitBash);
@@ -329,43 +266,24 @@ describe('BashResolver', () => {
     const runner = new MockRunner({
       files: [launcher, gitBash],
       whereHits: { bash: [launcher, gitBash] },
-      unameOutputs: { [normalize(gitBash)]: 'MINGW64_NT-10.0-26300' },
     });
     const resolver = resolverFor(runner, { ...ENV, SystemRoot: 'D:\\Windows' });
 
     assert.equal(resolver.resolve(), gitBash);
-    assert.equal(
-      runner.recordedCalls.some(([file]) => normalize(file) === normalize(launcher)),
-      false,
-    );
-  });
-
-  it('身份不是 MINGW / MSYS 时继续找下一个', () => {
-    const programFiles = 'C:\\Program Files\\Git\\bin\\bash.exe';
-    const tools = 'C:\\Tools\\bash.exe';
-    const runner = new MockRunner({
-      files: [programFiles, tools],
-      whereHits: { bash: [tools] },
-      unameOutputs: { [normalize(programFiles)]: 'Linux', [normalize(tools)]: 'MINGW64_NT-10.0-26300' },
-    });
-
-    assert.equal(resolverFor(runner).resolve(), tools);
   });
 
   it('一个候选都没通过时抛错并列出原因', () => {
-    const programFiles = 'C:\\Program Files\\Git\\bin\\bash.exe';
     const wsl = 'C:\\Windows\\System32\\bash.exe';
     const runner = new MockRunner({
-      files: [programFiles, wsl],
+      files: [wsl],
       whereHits: { bash: [wsl] },
-      unameOutputs: { [normalize(programFiles)]: 'Linux' },
     });
 
     assert.throws(
       () => resolverFor(runner).resolve(),
       (error) =>
         error.code === 'GIT_BASH_NOT_FOUND' &&
-        error.message.includes('[rejected: Linux]') &&
+        error.message.includes('C:\\Program Files\\Git\\bin\\bash.exe') &&
         error.message.includes('[skipped: WSL launcher]'),
     );
   });
@@ -373,10 +291,7 @@ describe('BashResolver', () => {
   it('解析结果被缓存，后续调用不再探测', () => {
     const root = 'C:\\Scoop\\apps\\git\\current';
     const gitBash = `${root}\\bin\\bash.exe`;
-    const runner = new MockRunner({
-      files: [gitBash],
-      unameOutputs: { [normalize(gitBash)]: 'MINGW64_NT-10.0-26300' },
-    });
+    const runner = new MockRunner({ files: [gitBash] });
     const resolver = resolverFor(runner, { ...ENV, GIT_INSTALL_ROOT: root });
 
     assert.equal(resolver.resolve(), gitBash);
@@ -390,7 +305,6 @@ describe('BashResolver', () => {
     const runner = new MockRunner({
       files: [gitBash],
       whereHits: { bash: [gitBash] },
-      unameOutputs: { [normalize(gitBash)]: 'MINGW64_NT-10.0-26300' },
     });
     const resolver = resolverFor(runner);
 
