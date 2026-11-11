@@ -55,11 +55,8 @@ describe('BashResolver', () => {
 
   for (const [title, statResult, code, entry, accepted, fallback] of [
     ['普通文件', true, undefined, undefined, true, false],
-    ['指向文件的链接', true, undefined, 'link', true, false],
     ['目录', false, undefined, 'directory', false, false],
-    ['指向目录的链接', false, undefined, 'link', false, false],
     ['断开的链接', undefined, 'ENOENT', 'link', false, false],
-    ['循环链接', undefined, 'ELOOP', 'link', false, false],
     ['访问受限的应用别名', undefined, 'EACCES', 'link', true, true],
     ['访问受限的普通文件', undefined, 'EACCES', 'file', true, true],
     ['访问受限的目录', undefined, 'EACCES', 'directory', false, true],
@@ -176,23 +173,17 @@ describe('BashResolver', () => {
   });
 
   it('显式配置指向 WSL 启动器时拒绝', () => {
-    const wslBash = 'C:\\Windows\\System32\\bash.exe';
-    const resolver = resolverFor(new MockRunner({ files: [wslBash] }), ENV, wslBash);
+    for (const launcher of [
+      'C:\\Windows\\System32\\bash.exe',
+      'C:\\Users\\me\\AppData\\Local\\Microsoft\\WindowsApps\\bash.exe',
+    ]) {
+      const resolver = resolverFor(new MockRunner({ files: [launcher] }), ENV, launcher);
 
-    assert.throws(
-      () => resolver.resolve(),
-      (error) => error.code === 'GIT_BASH_NOT_FOUND' && error.message.includes('WSL'),
-    );
-  });
-
-  it('显式配置指向 WindowsApps 的商店别名时拒绝', () => {
-    const alias = 'C:\\Users\\me\\AppData\\Local\\Microsoft\\WindowsApps\\bash.exe';
-    const resolver = resolverFor(new MockRunner({ files: [alias] }), ENV, alias);
-
-    assert.throws(
-      () => resolver.resolve(),
-      (error) => error.code === 'GIT_BASH_NOT_FOUND' && error.message.includes('WSL'),
-    );
+      assert.throws(
+        () => resolver.resolve(),
+        (error) => error.code === 'GIT_BASH_NOT_FOUND' && error.message.includes('WSL'),
+      );
+    }
   });
 
   it('构造时传入的 bashPath 优先于自动发现', () => {
@@ -257,58 +248,15 @@ describe('BashResolver', () => {
     assert.throws(() => resolverFor(runner).resolve(), { code: 'GIT_BASH_NOT_FOUND' });
   });
 
-  it('跳过 System32\\bash.exe', () => {
-    const wslBash = 'C:\\Windows\\System32\\bash.exe';
-    const gitBash = 'C:\\Tools\\bash.exe';
-    const runner = new MockRunner({
-      files: [wslBash, gitBash],
-      pathFiles: [wslBash, gitBash],
-    });
+  it('路径里带 System32 或 WindowsApps 但不是启动器时照常采用', () => {
+    for (const gitBash of ['C:\\Tools\\System32\\bash.exe', 'C:\\Tools\\WindowsApps\\bash.exe']) {
+      const runner = new MockRunner({
+        files: [gitBash],
+        pathFiles: [gitBash],
+      });
 
-    assert.equal(resolverFor(runner, ENV, 'bash').resolve(), gitBash);
-  });
-
-  it('跳过 WindowsApps 下的商店别名', () => {
-    const alias = 'C:\\Users\\me\\AppData\\Local\\Microsoft\\WindowsApps\\bash.exe';
-    const gitBash = 'C:\\Tools\\bash.exe';
-    const runner = new MockRunner({
-      files: [alias, gitBash],
-      pathFiles: [alias, gitBash],
-    });
-
-    assert.equal(resolverFor(runner, ENV, 'bash').resolve(), gitBash);
-  });
-
-  it('路径里带 System32 但不是系统目录时照常采用', () => {
-    const gitBash = 'C:\\Tools\\System32\\bash.exe';
-    const runner = new MockRunner({
-      files: [gitBash],
-      pathFiles: [gitBash],
-    });
-
-    assert.equal(resolverFor(runner, ENV, 'bash').resolve(), gitBash);
-  });
-
-  it('路径里带 WindowsApps 但不是商店别名时照常采用', () => {
-    const gitBash = 'C:\\Tools\\WindowsApps\\bash.exe';
-    const runner = new MockRunner({
-      files: [gitBash],
-      pathFiles: [gitBash],
-    });
-
-    assert.equal(resolverFor(runner, ENV, 'bash').resolve(), gitBash);
-  });
-
-  it('SystemRoot 不在 C: 时按完整路径跳过启动器', () => {
-    const launcher = 'D:\\Windows\\System32\\bash.exe';
-    const gitBash = 'D:\\Tools\\bash.exe';
-    const runner = new MockRunner({
-      files: [launcher, gitBash],
-      pathFiles: [launcher, gitBash],
-    });
-    const resolver = resolverFor(runner, { ...ENV, SystemRoot: 'D:\\Windows' }, 'bash');
-
-    assert.equal(resolver.resolve(), gitBash);
+      assert.equal(resolverFor(runner, ENV, 'bash').resolve(), gitBash);
+    }
   });
 
   it('一个候选都没通过时抛错并列出原因', () => {

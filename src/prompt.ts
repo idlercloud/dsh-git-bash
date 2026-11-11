@@ -11,7 +11,7 @@
  * 名字的 code-unit 顺序排，"tool:bash" 是 "tool:bash:git-bash" 的前缀，所以这段
  * 稳定落在官方那段之后。
  *
- * 只在 win32 注册：其他平台上这个插件本身没有意义，多出来的一段提示词只会误导模型。
+ * 插件入口只在 win32 调用本函数：其他平台上这段提示词只会误导模型。
  *
  * @module dsh-git-bash/prompt
  */
@@ -38,9 +38,8 @@ export const GIT_BASH_PROMPT =
   'Prefer `bash` for command-line work. Use `pwsh` only when the task is Windows-native, such as cmdlets, ' +
   'the registry, services, and WMI, or when `bash` is unavailable.';
 
-/** 可注入的选项，测试用来替换 platform 与服务。 */
+/** 可注入的选项，测试用来替换 prompt 服务。 */
 export interface GitBashPromptOptions {
-  platform?: NodeJS.Platform;
   prompt?: SystemPrompt;
 }
 
@@ -48,16 +47,13 @@ export interface GitBashPromptOptions {
  * 注册系统提示词 section。
  *
  * @param ctx - 插件 context，宿主需已提供 systemPrompt。
- * @param options - 测试用：platform、prompt 可注入。
+ * @param options - 测试用：prompt 可注入。
  * @returns effect disposer；不注册时 undefined。
  */
 export function installGitBashPrompt(
   ctx: Context,
   options: GitBashPromptOptions = {},
 ): Disposable<Promise<void>> | undefined {
-  const platform = options.platform ?? process.platform;
-  if (platform !== 'win32') return undefined;
-
   const prompt = options.prompt ?? ctx.get('systemPrompt');
   if (!prompt) return undefined;
 

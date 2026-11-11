@@ -11,7 +11,7 @@
  * 工具体执行之前求值，只能拒绝、不能放行。把检查放在 pre-execute 监听器里会被
  * 其他策略或审批插件的 allow 覆盖，guard 不会。
  *
- * 只在 win32 注册。
+ * 插件入口只在 win32 调用本函数。
  *
  * @module dsh-git-bash/guard
  */
@@ -115,24 +115,15 @@ function ownsBashCall(ctx: Context, exec: ToolExecution): boolean {
   return visible !== undefined && visible === registered;
 }
 
-/** 注册可注入的选项。 */
-export interface BashGuardOptions {
-  platform?: NodeJS.Platform;
-}
-
 /**
  * 注册工具层守卫。
  *
  * 只处理名为 `bash` 的调用，其余调用直接放行，不读取策略。
  *
  * @param ctx - 插件 context，需已注入 tools 服务。
- * @param options - 测试用：platform 可注入。
- * @returns 撤销器；非 win32 时为 undefined。
+ * @returns 撤销器。
  */
-export function installBashGuard(ctx: Context, options: BashGuardOptions = {}): (() => void) | undefined {
-  const platform = options.platform ?? process.platform;
-  if (platform !== 'win32') return undefined;
-
+export function installBashGuard(ctx: Context): () => void {
   return ctx.tools.guard((exec) => {
     if (exec.name !== BASH_TOOL_NAME) return undefined;
     if (!ownsBashCall(ctx, exec)) return undefined;

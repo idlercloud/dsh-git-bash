@@ -52,12 +52,12 @@ describe('SECTION_NAME', () => {
 });
 
 describe('installGitBashPrompt', () => {
-  it('在 win32 上用宿主给的 TOOL_BASH 位置注册一段 section', () => {
+  it('用宿主给的 TOOL_BASH 位置注册一段 section', () => {
     // 位置故意不取 1000，确保实现没有写死数字。
     const prompt = fakePrompt({ orders: { TOOL_BASH: 1012 } });
     const ctx = fakeCtx({ prompt });
 
-    const dispose = installGitBashPrompt(ctx, { platform: 'win32' });
+    const dispose = installGitBashPrompt(ctx);
 
     assert.equal(prompt.sections.length, 1);
     assert.equal(prompt.sections[0].name, SECTION_NAME);
@@ -67,21 +67,10 @@ describe('installGitBashPrompt', () => {
     assert.equal(typeof dispose, 'function');
   });
 
-  it('非 win32 平台不注册', () => {
-    for (const platform of ['linux', 'darwin', 'freebsd', 'android']) {
-      const prompt = fakePrompt();
-      const ctx = fakeCtx({ prompt });
-
-      assert.equal(installGitBashPrompt(ctx, { platform }), undefined);
-      assert.deepEqual(prompt.sections, []);
-      assert.deepEqual(ctx.effects, []);
-    }
-  });
-
   it('宿主没有 systemPrompt 服务时安静跳过', () => {
     const ctx = fakeCtx({ prompt: undefined });
 
-    assert.equal(installGitBashPrompt(ctx, { platform: 'win32' }), undefined);
+    assert.equal(installGitBashPrompt(ctx), undefined);
     assert.deepEqual(ctx.effects, []);
   });
 });

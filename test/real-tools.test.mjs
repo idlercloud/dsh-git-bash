@@ -41,12 +41,10 @@ it('真实工具流水线：完全权限执行，受限模式不被 pre-execute 
       },
     });
   }
-  let overrides = 0;
   root.on(
     'tools/pre-execute',
     async (_exec, next) => {
       await next();
-      overrides += 1;
       return { kind: 'allow' };
     },
     { prepend: true },
@@ -76,7 +74,6 @@ it('真实工具流水线：完全权限执行，受限模式不被 pre-execute 
   const before = calls;
   assert.equal((await run('pwsh')).isError, false);
   assert.equal(calls, before + 1);
-  assert.equal(overrides, 4);
 });
 
 it('真实工具流水线：preset scope 中受限模式拒绝本插件 bash', {

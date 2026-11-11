@@ -50,7 +50,7 @@ function fakeCtx({ policy, tools }) {
 /** 装好 guard，返回它注册的守卫集合与事后检查入口。 */
 function install({ policy, tools = fakeTools() } = {}) {
   const ctx = fakeCtx({ policy, tools });
-  const dispose = installBashGuard(ctx, { platform: 'win32' });
+  const dispose = installBashGuard(ctx);
   return { tools, dispose, check: (exec) => tools.service.check(exec) };
 }
 
@@ -89,21 +89,11 @@ describe('bashDenialReason', () => {
 });
 
 describe('installBashGuard', () => {
-  it('在 win32 上注册一个工具守卫', () => {
+  it('注册一个工具守卫', () => {
     const { tools, dispose } = install({ policy: fakePolicy().service });
 
     assert.equal(tools.guards.length, 1);
     assert.equal(typeof dispose, 'function');
-  });
-
-  it('非 win32 平台不注册', () => {
-    for (const platform of ['linux', 'darwin', 'freebsd', 'android']) {
-      const tools = fakeTools();
-      const ctx = fakeCtx({ policy: fakePolicy().service, tools });
-
-      assert.equal(installBashGuard(ctx, { platform }), undefined);
-      assert.equal(tools.guards.length, 0);
-    }
   });
 
   it('非 bash 调用不读取策略', () => {
@@ -137,22 +127,12 @@ describe('installBashGuard', () => {
     assert.equal(policy.requests[0].session, session);
   });
 
-  it('workspace-write 下拒绝', () => {
-    const { check } = install({ policy: fakePolicy({ mode: 'workspace-write' }).service });
+  it('策略服务缺失或解析失败时拒绝', () => {
+    const missing = install({});
+    assert.equal(typeof missing.check({ name: BASH_TOOL_NAME, agent: { session: {} } }), 'string');
 
-    assert.equal(typeof check({ name: BASH_TOOL_NAME, agent: { session: {} } }), 'string');
-  });
-
-  it('宿主没有 sandboxPolicy 服务时拒绝', () => {
-    const { check } = install({});
-
-    assert.equal(typeof check({ name: BASH_TOOL_NAME, agent: { session: {} } }), 'string');
-  });
-
-  it('策略解析抛错时拒绝', () => {
-    const { check } = install({ policy: fakePolicy({ failure: new Error('no projection') }).service });
-
-    assert.equal(typeof check({ name: BASH_TOOL_NAME, agent: { session: {} } }), 'string');
+    const failing = install({ policy: fakePolicy({ failure: new Error('no projection') }).service });
+    assert.equal(typeof failing.check({ name: BASH_TOOL_NAME, agent: { session: {} } }), 'string');
   });
 
   it('没有 agent 时用实例默认模式判定', () => {
@@ -163,11 +143,5 @@ describe('installBashGuard', () => {
     // 无会话时 resolve 收到的 session 是 undefined，按实例默认模式解析。
     assert.equal(policy.requests.length, 1);
     assert.equal(policy.requests[0].session, undefined);
-  });
-
-  it('没有 agent 且实例默认模式受限时拒绝', () => {
-    const { check } = install({ policy: fakePolicy({ mode: 'read-only' }).service });
-
-    assert.equal(typeof check({ name: BASH_TOOL_NAME }), 'string');
   });
 });

@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import { it } from 'node:test';
 import { apply } from '../lib/index.js';
 
-for (const platform of ['linux', 'darwin']) {
-  it(`直接加载插件时在 ${platform} 上不访问或注册宿主服务`, () => {
+it('直接加载插件时在非 Windows 平台不访问或注册宿主服务', () => {
+  for (const platform of ['linux', 'darwin']) {
     const descriptor = Object.getOwnPropertyDescriptor(process, 'platform');
     const ctx = new Proxy(
       {},
@@ -20,5 +20,5 @@ for (const platform of ['linux', 'darwin']) {
     } finally {
       Object.defineProperty(process, 'platform', descriptor);
     }
-  });
-}
+  }
+});

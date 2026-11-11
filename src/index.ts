@@ -112,12 +112,11 @@ export function apply(ctx: Context, config: PluginConfig): void {
 
   const resolver = new BashResolver({ bashPath: config.bashPath });
   installGitBashPrompt(ctx);
-  if (installBashGuard(ctx) !== undefined) {
-    ctx.logger.info(
-      'dsh-git-bash: `bash` is denied before spawn unless the session file policy is `%s`.',
-      FULL_ACCESS_MODE,
-    );
-  }
+  installBashGuard(ctx);
+  ctx.logger.info(
+    'dsh-git-bash: `bash` is denied before spawn unless the session file policy is `%s`.',
+    FULL_ACCESS_MODE,
+  );
   // 构造即注册：构造函数把执行器挂到隔离作用域的 ctx.shell 上，实例由 context 持有。
   new GitBashExecutor(ctx, config, resolver);
 }
