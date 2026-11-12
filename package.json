@@ -1,6 +1,6 @@
 {
   "name": "@idlercloud/dsh-git-bash",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Git for Windows bash tool for DSH on Windows; fork of Fishquito7/dsh-gitbash.",
   "author": "idlercloud",
   "type": "module",

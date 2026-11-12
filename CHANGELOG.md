@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.1 (2026-11-12)
+
+- 兼容 DSH `0.2.2-rc.2`
+
 ## 0.3.0 (2026-11-12)
 
 - 受限会话可以带 `sandbox_permissions: "danger-full-access"` 和 `justification` 重试；审批通过后只对当次调用生效，会话策略不变。
