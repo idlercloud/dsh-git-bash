@@ -34,7 +34,7 @@ In addition, the existing pwsh tool is still kept, because cases such as the reg
 
 ## Limitations
 
-Verified with DSH `0.2.2-rc.1` and `0.2.2-rc.2`. The compatibility declaration and DSH peer dependencies cover both versions. Revalidate the plugin before upgrading to another DSH version.
+Verified with DSH `0.2.2-rc.1`, `0.2.2-rc.2` and `0.2.2-rc.3`. The compatibility declaration and DSH peer dependencies cover all three versions. Revalidate the plugin before upgrading to another DSH version.
 
 **It does not go through a file sandbox, so it runs only under `danger-full-access`.**
 
@@ -56,7 +56,7 @@ In a narrower session, the model can retry the same command with `sandbox_permis
 
 - Windows 10/11.
 - Git for Windows installed (provides `bash.exe`).
-- DSH `0.2.2-rc.1` or `0.2.2-rc.2`.
+- DSH `0.2.2-rc.1`, `0.2.2-rc.2` or `0.2.2-rc.3`.
 
 Desktop is a special case: normally install through the built-in plugin manager by entering the package name `@idlercloud/dsh-git-bash`. To install a specific version, enter `@idlercloud/dsh-git-bash@0.3.1`.
 

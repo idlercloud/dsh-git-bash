@@ -34,7 +34,7 @@
 
 ## 限制
 
-已在 DSH `0.2.2-rc.1` 和 `0.2.2-rc.2` 上验证，兼容性声明与 DSH peer 依赖覆盖这两个版本。升级到其他 DSH 版本前需要重新验证本插件。
+已在 DSH `0.2.2-rc.1`、`0.2.2-rc.2` 和 `0.2.2-rc.3` 上验证，兼容性声明与 DSH peer 依赖覆盖这三个版本。升级到其他 DSH 版本前需要重新验证本插件。
 
 **不经过文件沙箱，只在 `danger-full-access` 下运行。**
 
@@ -56,7 +56,7 @@ Git Bash 是 MSYS2 进程，在 Windows 受限令牌下需要 fork、管道与�
 
 - Windows 10/11。
 - 已安装 Git for Windows（含 `bash.exe`）。
-- DSH `0.2.2-rc.1` 或 `0.2.2-rc.2`。
+- DSH `0.2.2-rc.1`、`0.2.2-rc.2` 或 `0.2.2-rc.3`。
 
 桌面端是特殊的，一般通过内置的插件管理器安装，输入包名 `@idlercloud/dsh-git-bash` 即可安装，如需安装特定版本，可以输入 `@idlercloud/dsh-git-bash@0.3.1`。
 
